@@ -1,0 +1,6 @@
+[submodule "game-service"]
+	path = game-service
+	url = https://github.com/DimonBel/game-service.git
+[submodule "player-service"]
+	path = player-service
+	url = https://github.com/DimonBel/player-service.git
