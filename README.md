@@ -11,7 +11,7 @@ The platform is a distributed set of microservices simulating a persistent, mult
 Microservices are implemented using multiple technologies to optimize performance and leverage language-specific strengths:
 
 - **Elixir/Phoenix:** Player Service (Dima), Game Service (Dima), Exam Service (Alexandra), World Service (Alexandra)
-- **TypeScript (Node.js / Fastify):** Zombie Service (Ivan), Resource Service (Ivan), Base Service (Sasha), Crafting Service (Sasha)
+- **Ruby/Sinatra** Zombie Service (Ivan), Resource Service (Ivan), Base Service (Sasha), Crafting Service (Sasha)
 
 ## Technologies & Communication Patterns
 
@@ -19,8 +19,8 @@ Microservices are implemented using multiple technologies to optimize performanc
 | ------------------------ | -------------------------------- | ----------------------------- | ---------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dmitrii Belih            | Player Service, Game Service     | Elixir, Phoenix               | PostgreSQL | REST with JWT auth, WebSockets (Phoenix Channels), async timers, CQRS | Phoenix's secure auth plugs and channels are ideal for player identity and real-time gameplay. Elixir's lightweight processes and OTP supervision handle high-concurrency lobbies, day/night cycles and live action progress over WebSockets.                                             |
 | Alexandra Mihalevschi    | Exam Service, World Service      | Elixir, Phoenix               | PostgreSQL | REST, Async event-driven updates (PubSub), notifications, CQRS        | Elixir's OTP supervision gives us fault-tolerant exam grading workflows and reliable world-state mutations. Phoenix PubSub makes fanning out `ExamPassed` events to the World Service and achievements effortless.                                                                        |
-| Ivan Rudenco             | Zombie Service, Resource Service | TypeScript, Node.js (Fastify) | PostgreSQL | REST, Idempotent operations, Async notification queues, CQRS          | Fastify's low-overhead, schema-validated HTTP layer (with JSON Schema + TypeScript providers) is ideal for read-heavy zombie config endpoints and high-throughput idempotent resource transactions (gain / consume / transfer), backed by Postgres transactions.                          |
-| Bujor - Cobili Alexandra | Base Service, Crafting Service   | TypeScript, Node.js (Fastify) | PostgreSQL | REST, Atomic transactions, Async event-driven updates, CQRS           | Fastify plugins keep base upgrades, Kiki rewards and atomic recipe resolution modular and testable. Postgres transactions (via `pg` / `knex` / `Prisma`) make atomic consume-then-credit flows safe, while `fastify-event-bus`-style emitters notify Player Service on inventory changes. |
+| Ivan Rudenco             | Zombie Service, Resource Service | Ruby, Sinatra | PostgreSQL | REST, Idempotent operations, Async notification queues, CQRS          | Fastify's low-overhead, schema-validated HTTP layer (with JSON Schema + TypeScript providers) is ideal for read-heavy zombie config endpoints and high-throughput idempotent resource transactions (gain / consume / transfer), backed by Postgres transactions.                          |
+| Bujor - Cobili Alexandra | Base Service, Crafting Service   | Ruby, Sinatra | PostgreSQL | REST, Atomic transactions, Async event-driven updates, CQRS           | Fastify plugins keep base upgrades, Kiki rewards and atomic recipe resolution modular and testable. Postgres transactions (via `pg` / `knex` / `Prisma`) make atomic consume-then-credit flows safe, while `fastify-event-bus`-style emitters notify Player Service on inventory changes. |
 
 ## Architectural Diagram
 
