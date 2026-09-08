@@ -4,3 +4,9 @@
 [submodule "player-service"]
 	path = player-service
 	url = https://github.com/DimonBel/player-service.git
+[submodule "resource-service"]
+	path = resource-service
+	url = https://github.com/tukaram40k/resource-service.git
+[submodule "zombie-service"]
+	path = zombie-service
+	url = https://github.com/tukaram40k/zombie-service.git
