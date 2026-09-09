@@ -10,3 +10,9 @@
 [submodule "zombie-service"]
 	path = zombie-service
 	url = https://github.com/tukaram40k/zombie-service.git
+[submodule "base-service"]
+	path = base-service
+	url = https://github.com/AlexandraB-C/base-service.git
+[submodule "crafting-service"]
+	path = crafting-service
+	url = https://github.com/AlexandraB-C/crafting-service.git
