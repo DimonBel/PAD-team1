@@ -16,3 +16,9 @@
 [submodule "crafting-service"]
 	path = crafting-service
 	url = https://github.com/AlexandraB-C/crafting-service.git
+[submodule "world-service"]
+	path = world-service
+	url = https://github.com/danganhuh/world-service
+[submodule "exam-service"]
+	path = exam-service
+	url = https://github.com/danganhuh/exam-service
