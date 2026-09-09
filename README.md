@@ -416,20 +416,60 @@ Headers: `Authorization: Bearer <service_jwt>`
 
 ## 3. Zombie Service
 
-Manages **zombie type definitions, behaviour configurations and per-instance state** within a game lobby. The service owns zombie inventories so that when a zombie steals resources from the world or from players, those items are held by the zombie instance until it is killed. On death, the zombie's full inventory is transferred atomically to the player who killed it.
+Manages **zombie type definitions, behaviour configurations and per-instance state** within a game session (lobby). The service owns zombie instances, their current state/stats and their inventories, so that when a zombie steals resources from the world or from players those items are held by the zombie instance until it is killed. On death, the zombie's full inventory is transferred atomically to the player who killed it.
 
 ### Responsibilities
 
-- Maintain a registry of zombie types, their stats and behaviour configurations.
-- Spawn and despawn zombie instances within a lobby.
-- Track each zombie instance's inventory of stolen resources.
-- Process zombie steal events from the world map and from player inventories.
+- Maintain a registry of zombie types with full CRUD: create, read, update and delete their stats, loot and behaviour configurations.
+- CRUD zombie instances within a session: spawn, list, get, update and despawn.
+- Track each zombie instance's current state (status, room, active behaviours).
+- Track each zombie instance's stats (type, health, damage, ...).
+- Own each zombie instance's inventory of stolen resources (read/update).
 - Transfer a zombie's full inventory to the killing player on death.
 - Provide zombie type data to Game Service for encounter resolution.
 
 ### Endpoints
 
-#### List Zombie Types
+#### Zombie Type CRUD
+
+##### Create a Zombie Type
+
+`POST /api/zombies/types`
+Description: Creates a new zombie type definition with its stats and behaviour configuration. Used at season bootstrap and by moderators to add new enemy types.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "type_id": "tourist_zombie",
+  "name": "Tourist Zombie",
+  "health": 80,
+  "damage": 12,
+  "speed": 1.5,
+  "loot_table_id": "loot-tourist-01",
+  "behaviours": [
+    { "trigger": "player_nearby", "action": "chase", "range_tiles": 5 }
+  ]
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "type_id": "tourist_zombie",
+  "name": "Tourist Zombie",
+  "health": 80,
+  "damage": 12,
+  "speed": 1.5,
+  "loot_table_id": "loot-tourist-01",
+  "behaviours": [
+    { "trigger": "player_nearby", "action": "chase", "range_tiles": 5 }
+  ]
+}
+```
+
+##### List Zombie Types
 
 `GET /api/zombies/types`
 Description: Returns all configured zombie types with their stats and behaviours.
@@ -457,7 +497,7 @@ Success Response (200 OK):
 ]
 ```
 
-#### Get Zombie Type Details
+##### Get Zombie Type Details
 
 `GET /api/zombies/types/{type_id}`
 Description: Returns full details for a single zombie type, including its behaviour rules.
@@ -480,10 +520,70 @@ Success Response (200 OK):
 }
 ```
 
-#### Get Zombie Instances in a Lobby
+Error Response (404 Not Found):
+
+```json
+{ "error": "Zombie type not found." }
+```
+
+##### Update a Zombie Type
+
+`PATCH /api/zombies/types/{type_id}`
+Description: Edits a zombie type's stats or behaviour rules without recreating it, so existing instances keep referencing a valid `type_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "health": 95,
+  "speed": 1.4,
+  "behaviours": [
+    { "trigger": "player_nearby", "action": "chase", "range_tiles": 6 }
+  ]
+}
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "type_id": "professor_zombie",
+  "name": "Professor Zombie",
+  "health": 95,
+  "damage": 15,
+  "speed": 1.4,
+  "loot_table_id": "loot-professor-01",
+  "behaviours": [
+    { "trigger": "player_nearby", "action": "chase", "range_tiles": 6 },
+    { "trigger": "player_in_room", "action": "steal", "max_items": 2 },
+    { "trigger": "day_phase", "action": "hide", "location": "exam_hall" }
+  ]
+}
+```
+
+##### Delete a Zombie Type
+
+`DELETE /api/zombies/types/{type_id}`
+Description: Removes a zombie type from the registry. Refused while active instances still reference it.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{ "type_id": "tourist_zombie", "deleted": true }
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Cannot delete a zombie type that still has active instances." }
+```
+
+#### Zombie Instance CRUD (in a Session)
+
+##### List Zombie Instances in a Session
 
 `GET /api/zombies/lobbies/{lobby_id}/instances`
-Description: Returns all active zombie instances in a lobby, including their current inventories.
+Description: Returns all active zombie instances in a session (lobby), including their current state, stats and inventories.
 Headers: `Authorization: Bearer <service_jwt>`
 Success Response (200 OK):
 
@@ -495,6 +595,7 @@ Success Response (200 OK):
     "lobby_id": "lobby-uuid-789",
     "health": 100,
     "room_id": "exam-hall-3",
+    "state": { "status": "idle", "phase": "day" },
     "inventory": [
       { "item_id": "coffee-01", "count": 1 },
       { "item_id": "metal-01", "count": 3 }
@@ -503,17 +604,16 @@ Success Response (200 OK):
 ]
 ```
 
-#### Spawn a Zombie Instance
+##### Spawn a Zombie Instance (Create)
 
-`POST /api/zombies/instances`
-Description: Spawns a new zombie instance in a lobby. Called by Game Service at cycle transitions or encounter triggers.
+`POST /api/zombies/lobbies/{lobby_id}/instances`
+Description: Spawns a new zombie instance in a session. Called by Game Service at cycle transitions or encounter triggers.
 Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
 ```json
 {
   "type_id": "professor_zombie",
-  "lobby_id": "lobby-uuid-789",
   "room_id": "exam-hall-3"
 }
 ```
@@ -527,14 +627,239 @@ Success Response (201 Created):
   "lobby_id": "lobby-uuid-789",
   "health": 100,
   "room_id": "exam-hall-3",
+  "state": { "status": "idle", "phase": "day" },
   "inventory": []
 }
 ```
 
-#### Zombie Steals from World
+##### Get a Zombie Instance (Read)
+
+`GET /api/zombies/lobbies/{lobby_id}/instances/{zombie_id}`
+Description: Returns a single zombie instance's full record — state, stats and inventory.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{
+  "zombie_id": "zombie-uuid-001",
+  "type_id": "professor_zombie",
+  "lobby_id": "lobby-uuid-789",
+  "health": 60,
+  "room_id": "canteen",
+  "state": { "status": "stealing", "target_player_id": "player-uuid-123", "phase": "day" },
+  "inventory": [
+    { "item_id": "coffee-01", "count": 1 },
+    { "item_id": "metal-01", "count": 3 }
+  ]
+}
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "Zombie instance not found." }
+```
+
+##### Update a Zombie Instance (Update)
+
+`PATCH /api/zombies/lobbies/{lobby_id}/instances/{zombie_id}`
+Description: Updates structural instance fields such as the room the zombie currently occupies. For state, stats or inventory changes, use the dedicated `/state`, `/stats` and `/inventory` endpoints below.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{ "room_id": "library-2" }
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "zombie_id": "zombie-uuid-001",
+  "type_id": "professor_zombie",
+  "lobby_id": "lobby-uuid-789",
+  "health": 60,
+  "room_id": "library-2",
+  "state": { "status": "stealing", "target_player_id": "player-uuid-123", "phase": "day" },
+  "inventory": [
+    { "item_id": "coffee-01", "count": 1 },
+    { "item_id": "metal-01", "count": 3 }
+  ]
+}
+```
+
+##### Despawn a Zombie Instance (Delete)
+
+`DELETE /api/zombies/lobbies/{lobby_id}/instances/{zombie_id}`
+Description: Removes a zombie instance from the session without transferring its loot (event despawn, server cleanup, zombie fled). To hand the inventory to a killing player, use the "Zombie Killed" flow below instead.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{ "zombie_id": "zombie-uuid-001", "lobby_id": "lobby-uuid-789", "despawned": true }
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Zombie instance not found or already despawned." }
+```
+
+#### Zombie State (Read / Update)
+
+##### Get Zombie State
+
+`GET /api/zombies/instances/{zombie_id}/state`
+Description: Returns the zombie's current behavioural state.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{
+  "zombie_id": "zombie-uuid-001",
+  "status": "chasing",
+  "room_id": "exam-hall-3",
+  "target_player_id": "player-uuid-123",
+  "active_behaviours": [
+    { "trigger": "player_nearby", "action": "chase", "range_tiles": 5 }
+  ],
+  "phase": "day"
+}
+```
+
+##### Update Zombie State
+
+`PATCH /api/zombies/instances/{zombie_id}/state`
+Description: Updates the zombie's behavioural state (idle → chasing → stealing → hiding/dead). Called by Game Service during encounters and by the zombie tick loop.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "status": "stealing",
+  "room_id": "canteen",
+  "target_player_id": "player-uuid-456"
+}
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "zombie_id": "zombie-uuid-001",
+  "status": "stealing",
+  "room_id": "canteen",
+  "target_player_id": "player-uuid-456",
+  "active_behaviours": [
+    { "trigger": "player_in_room", "action": "steal", "max_items": 2 }
+  ],
+  "phase": "day"
+}
+```
+
+#### Zombie Stats (Read / Update)
+
+##### Get Zombie Stats
+
+`GET /api/zombies/instances/{zombie_id}/stats`
+Description: Returns the zombie's combat-relevant stats (type, health, damage, ...).
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{
+  "zombie_id": "zombie-uuid-001",
+  "type_id": "professor_zombie",
+  "health": 60,
+  "max_health": 100,
+  "damage": 15,
+  "speed": 1.2
+}
+```
+
+##### Update Zombie Stats
+
+`PATCH /api/zombies/instances/{zombie_id}/stats`
+Description: Updates the zombie's current stats (e.g. damage taken during a fight). Idempotent under a per-event `event_id` where needed.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{ "health": 40 }
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "zombie_id": "zombie-uuid-001",
+  "type_id": "professor_zombie",
+  "health": 40,
+  "max_health": 100,
+  "damage": 15,
+  "speed": 1.2
+}
+```
+
+#### Zombie Inventory (Read / Update)
+
+##### Get Zombie Inventory
+
+`GET /api/zombies/instances/{zombie_id}/inventory`
+Description: Returns the zombie's full inventory of stolen resources. Called by Game Service when a zombie is killed to know what to transfer.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+[
+  { "item_id": "coffee-01", "count": 1 },
+  { "item_id": "metal-01", "count": 6 },
+  { "item_id": "wood-01", "count": 2 }
+]
+```
+
+##### Update Zombie Inventory
+
+`PATCH /api/zombies/instances/{zombie_id}/inventory`
+Description: Adds or removes stolen items from the zombie's inventory. Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "operation": "add",
+  "items": [
+    { "item_id": "sandwich-01", "count": 1 }
+  ],
+  "event_id": "evt-uuid-steal-002"
+}
+```
+
+Success Response (200 OK):
+
+```json
+[
+  { "item_id": "coffee-01", "count": 1 },
+  { "item_id": "metal-01", "count": 6 },
+  { "item_id": "wood-01", "count": 2 },
+  { "item_id": "sandwich-01", "count": 1 }
+]
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Insufficient items to remove from zombie inventory." }
+```
+
+#### Zombie Event Flows
+
+The following endpoints reuse the primitives above for in-game event flows.
+
+##### Zombie Steals from World
 
 `POST /api/zombies/instances/{zombie_id}/steal-world`
-Description: Records resources stolen by a zombie from a world tile. Called by World Service when a zombie occupies a resource node. Idempotent via `event_id`.
+Description: Records resources stolen by a zombie from a world tile. Convenience wrapper over "Update Zombie Inventory" (`operation: add`); also reserves the grabbed amount on the Resource Service map. Called by World Service when a zombie occupies a resource node. Idempotent via `event_id`.
 Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
@@ -562,10 +887,10 @@ Success Response (200 OK):
 }
 ```
 
-#### Zombie Steals from Player
+##### Zombie Steals from Player
 
 `POST /api/zombies/instances/{zombie_id}/steal-player`
-Description: Records resources stolen by a zombie from a player's inventory. Called by Game Service during encounter resolution. Idempotent via `event_id`.
+Description: Records resources stolen by a zombie from a player's inventory. Convenience wrapper over "Update Zombie Inventory"; also deducts the items from the Player Service inventory. Called by Game Service during encounter resolution. Idempotent via `event_id`.
 Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
@@ -593,10 +918,10 @@ Success Response (200 OK):
 }
 ```
 
-#### Zombie Killed
+##### Zombie Killed
 
 `POST /api/zombies/instances/{zombie_id}/killed`
-Description: Transfers the zombie's full inventory to the player who killed it and despawns the zombie. Called by Game Service after encounter resolution. Idempotent via `event_id`.
+Description: Transfers the zombie's full inventory to the player who killed it, clears its state/stats and despawns it. Internally: reads the inventory, credits the killer via Player Service, then removes the instance. Idempotent via `event_id`.
 Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
@@ -634,86 +959,60 @@ Error Response (409 Conflict):
 
 ## 4. Resource Service
 
-Acts as the **single source of truth for resource pools and their distribution** across a game session. Owns the authoritative stock of each resource type per lobby/world tile and ensures that allocations are idempotent — resources are never duplicated and never silently disappear. Game Service, World Service, Base Service and Crafting Service all request resources through this service.
+Acts as the **single source of truth for resource quantities in a game session**: how much of every resource exists on the map (resource points), how much of every resource is held by any individual entity (player, zombie, base, crafting job) and an immutable audit trail of every movement as a transaction. Game Service, World Service, Base Service and Crafting Service all request resources through this service. All mutating operations are idempotent via `event_id` — resources are never duplicated and never silently disappear.
 
 ### Responsibilities
 
-- Maintain resource pools scoped to lobbies or world tiles.
-- Track the current stock of every resource type within each pool.
-- Serve resource availability queries from Game, World, Base and Crafting Services.
-- Execute idempotent allocation transactions that atomically deduct from a pool and credit to a consumer.
-- Provide a transfer verification endpoint so callers can confirm a prior allocation succeeded.
-- Consolidate fragmented or duplicate resource entries to keep pool data clean.
+- CRUD resource points on the map (location + resource type + current amount / capacity).
+- Serve the current amount of any resource on the map and update it (restock / deplete / set).
+- Track and update the resource count held by any individual entity.
+- Execute gathering actions: atomically deduct from a map location and credit the gathering entity, returning the appropriate amount actually gathered.
+- Record every gather / transfer / allocation as a transaction and expose its details for verification.
 
 ### Endpoints
 
-#### List Resource Pools
+#### Resource Point CRUD
 
-`GET /api/resources/pools`
-Description: Returns all resource pools, optionally filtered by lobby or world tile.
+##### List Resource Points on the Map
+
+`GET /api/resources/points`
+Description: Returns all resource points on the map, optionally filtered by `room_id` or `resource`.
 Headers: `Authorization: Bearer <service_jwt>`
-Query Parameters: `lobby_id` (optional), `room_id` (optional)
+Query Parameters: `room_id` (optional), `resource` (optional)
 Success Response (200 OK):
 
 ```json
 [
   {
-    "pool_id": "pool-uuid-001",
-    "lobby_id": "lobby-uuid-789",
+    "point_id": "point-uuid-001",
     "room_id": "lab-204",
-    "resources": [
-      { "item_id": "metal-01", "stock": 12 },
-      { "item_id": "wood-01", "stock": 8 },
-      { "item_id": "scrap-01", "stock": 25 }
-    ]
+    "resource": "metal-01",
+    "amount": 12,
+    "max_amount": 30
   },
   {
-    "pool_id": "pool-uuid-002",
-    "lobby_id": null,
+    "point_id": "point-uuid-002",
     "room_id": "canteen",
-    "resources": [
-      { "item_id": "food-01", "stock": 30 },
-      { "item_id": "coffee-01", "stock": 15 }
-    ]
+    "resource": "food-01",
+    "amount": 30,
+    "max_amount": 50
   }
 ]
 ```
 
-#### Get Pool Details
+##### Create a Resource Point
 
-`GET /api/resources/pools/{pool_id}`
-Description: Returns full details for a single resource pool, including per-item stock.
-Headers: `Authorization: Bearer <service_jwt>`
-Success Response (200 OK):
-
-```json
-{
-  "pool_id": "pool-uuid-001",
-  "lobby_id": "lobby-uuid-789",
-  "room_id": "lab-204",
-  "resources": [
-    { "item_id": "metal-01", "stock": 12 },
-    { "item_id": "wood-01", "stock": 8 },
-    { "item_id": "scrap-01", "stock": 25 }
-  ]
-}
-```
-
-#### Create Resource Pool
-
-`POST /api/resources/pools`
-Description: Creates a new resource pool. Called by World Service when a lobby is created or a new room is unlocked.
+`POST /api/resources/points`
+Description: Creates a new resource point on the map. Called by World Service when a room / resource node is unlocked, or by moderators pre-seeding a season.
 Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
 ```json
 {
-  "lobby_id": "lobby-uuid-789",
   "room_id": "lab-204",
-  "initial_resources": [
-    { "item_id": "metal-01", "stock": 15 },
-    { "item_id": "wood-01", "stock": 10 }
-  ]
+  "resource": "metal-01",
+  "amount": 15,
+  "max_amount": 40
 }
 ```
 
@@ -721,78 +1020,240 @@ Success Response (201 Created):
 
 ```json
 {
-  "pool_id": "pool-uuid-003",
-  "lobby_id": "lobby-uuid-789",
+  "point_id": "point-uuid-003",
   "room_id": "lab-204",
-  "resources": [
-    { "item_id": "metal-01", "stock": 15 },
-    { "item_id": "wood-01", "stock": 10 }
-  ]
+  "resource": "metal-01",
+  "amount": 15,
+  "max_amount": 40
 }
 ```
 
-#### Allocate Resources
+##### Get a Resource Point
 
-`POST /api/resources/allocate`
-Description: Atomically deducts resources from a source pool and credits them to a consumer (player, zombie, crafting job, etc.). Idempotent via `event_id` — repeated calls with the same `event_id` return the original result without altering stock.
+`GET /api/resources/points/{point_id}`
+Description: Returns full details for a single resource point.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{
+  "point_id": "point-uuid-001",
+  "room_id": "lab-204",
+  "resource": "metal-01",
+  "amount": 9,
+  "max_amount": 30
+}
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "Resource point not found." }
+```
+
+##### Update a Resource Point
+
+`PATCH /api/resources/points/{point_id}`
+Description: Edits a resource point's type or capacity. Use "Update Resource Amount on the Map" below for routine restock / consume deltas.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{ "resource": "scrap-01", "max_amount": 60 }
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "point_id": "point-uuid-001",
+  "room_id": "lab-204",
+  "resource": "scrap-01",
+  "amount": 9,
+  "max_amount": 60
+}
+```
+
+##### Delete a Resource Point
+
+`DELETE /api/resources/points/{point_id}`
+Description: Removes a resource point from the map (e.g. a room converted to another type). Refused while a gather transaction is in flight.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{ "point_id": "point-uuid-001", "deleted": true }
+```
+
+#### Resource Amount on the Map (Read / Update)
+
+##### Get Resource Amount on the Map
+
+`GET /api/resources/map`
+Description: Returns the amount of any resource on the map. Filter by `room_id`, `resource`, or both; with no filters it returns the full map's amounts.
+Headers: `Authorization: Bearer <service_jwt>`
+Query Parameters: `room_id` (optional), `resource` (optional)
+Success Response (200 OK):
+
+```json
+[
+  { "room_id": "lab-204", "resource": "metal-01", "amount": 9 },
+  { "room_id": "lab-204", "resource": "wood-01", "amount": 6 },
+  { "room_id": "canteen", "resource": "food-01", "amount": 22 }
+]
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "No such resource." }
+```
+
+##### Update Resource Amount on the Map
+
+`PATCH /api/resources/map`
+Description: Adjusts the amount of a resource at a map location: `set` (restock to a value), `add` or `remove` (delta). Idempotent via `event_id`.
 Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
 ```json
 {
-  "event_id": "evt-uuid-alloc-001",
-  "source_pool_id": "pool-uuid-001",
-  "consumer_type": "player",
-  "consumer_id": "player-uuid-123",
-  "items": [
-    { "item_id": "metal-01", "count": 3 },
-    { "item_id": "wood-01", "count": 2 }
-  ]
+  "event_id": "evt-uuid-restock-001",
+  "room_id": "lab-204",
+  "resource": "metal-01",
+  "operation": "set",
+  "amount": 20
 }
 ```
 
 Success Response (200 OK):
 
 ```json
-{
-  "transfer_id": "transfer-uuid-001",
-  "source_pool_id": "pool-uuid-001",
-  "consumer_type": "player",
-  "consumer_id": "player-uuid-123",
-  "items_transferred": [
-    { "item_id": "metal-01", "count": 3 },
-    { "item_id": "wood-01", "count": 2 }
-  ],
-  "remaining_stock": [
-    { "item_id": "metal-01", "stock": 9 },
-    { "item_id": "wood-01", "stock": 6 }
-  ]
-}
+{ "room_id": "lab-204", "resource": "metal-01", "amount": 20 }
 ```
 
 Error Response (409 Conflict):
 
 ```json
-{ "error": "Insufficient stock for item metal-01 in pool pool-uuid-001." }
+{ "error": "Insufficient amount of metal-01 in lab-204." }
 ```
 
-#### Verify Transfer
+#### Entity Resource Count (Read / Update)
 
-`GET /api/resources/transactions/{transfer_id}`
-Description: Returns the details of a prior allocation. Used by callers to confirm a transfer completed successfully before trusting the result.
+Every individual resource holder — a player, a zombie, the base or a crafting job — is addressed as an entity.
+
+##### Get Entity Resource Count
+
+`GET /api/resources/entities/{entity_type}/{entity_id}`
+Description: Returns the current resource counts of a single entity. `entity_type` ∈ `player` | `zombie` | `base` | `crafting_job`.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+[
+  { "item_id": "metal-01", "count": 3 },
+  { "item_id": "wood-01", "count": 2 }
+]
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "Entity not found." }
+```
+
+##### Update Entity Resource Count
+
+`PATCH /api/resources/entities/{entity_type}/{entity_id}`
+Description: Updates the resource counts of a single entity (`add`, `remove` or `set`). Idempotent via `event_id`; the entity stock and the transaction audit record update atomically inside `Sequel.transaction { ... }`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-credit-001",
+  "operation": "add",
+  "items": [
+    { "item_id": "metal-01", "count": 3 }
+  ]
+}
+```
+
+Success Response (200 OK):
+
+```json
+[
+  { "item_id": "metal-01", "count": 6 },
+  { "item_id": "wood-01", "count": 2 }
+]
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Insufficient stock for item metal-01." }
+```
+
+#### Gather
+
+##### Initiate a Gathering Action
+
+`POST /api/resources/gather`
+Description: When a gathering action is initiated, the service validates the resource point, deducts the gathered amount from the map and credits the gathering entity atomically. Returns the **appropriate amount actually gathered** — clamped to the amount available at the point and the entity's capacity. Idempotent via `event_id`: repeat calls with the same `event_id` return the original result without re-crediting.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-gather-001",
+  "point_id": "point-uuid-001",
+  "resource": "metal-01",
+  "entity_type": "player",
+  "entity_id": "player-uuid-123",
+  "requested_amount": 10
+}
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "gather_id": "gather-uuid-001",
+  "event_id": "evt-uuid-gather-001",
+  "point_id": "point-uuid-001",
+  "resource": "metal-01",
+  "amount_gathered": 9,
+  "requested_amount": 10,
+  "remaining_at_point": 0,
+  "credited_to": { "entity_type": "player", "entity_id": "player-uuid-123" },
+  "status": "completed"
+}
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "Resource point not found or exhausted." }
+```
+
+#### Transactions
+
+##### Get Transaction Details
+
+`GET /api/resources/transactions/{transaction_id}`
+Description: Returns the details of a prior gather / transfer / allocation so callers can confirm a movement completed successfully before trusting the result (transfer verification).
 Headers: `Authorization: Bearer <service_jwt>`
 Success Response (200 OK):
 
 ```json
 {
-  "transfer_id": "transfer-uuid-001",
-  "event_id": "evt-uuid-alloc-001",
-  "source_pool_id": "pool-uuid-001",
-  "consumer_type": "player",
-  "consumer_id": "player-uuid-123",
+  "transaction_id": "transaction-uuid-001",
+  "event_id": "evt-uuid-gather-001",
+  "type": "gather",
+  "source": { "type": "point", "point_id": "point-uuid-001", "room_id": "lab-204" },
+  "target": { "entity_type": "player", "entity_id": "player-uuid-123" },
   "items_transferred": [
-    { "item_id": "metal-01", "count": 3 },
-    { "item_id": "wood-01", "count": 2 }
+    { "item_id": "metal-01", "count": 9 }
   ],
   "status": "completed",
   "created_at": "2026-09-05T10:05:00Z"
@@ -802,27 +1263,7 @@ Success Response (200 OK):
 Error Response (404 Not Found):
 
 ```json
-{ "error": "Transfer not found." }
-```
-
-#### Consolidate Pool
-
-`POST /api/resources/pools/{pool_id}/consolidate`
-Description: Merges duplicate or fragmented resource entries within a pool and returns the cleaned state. Called periodically or after bulk operations.
-Headers: `Authorization: Bearer <service_jwt>`
-Success Response (200 OK):
-
-```json
-{
-  "pool_id": "pool-uuid-001",
-  "consolidated_items": 3,
-  "removed_duplicates": 1,
-  "resources": [
-    { "item_id": "metal-01", "stock": 12 },
-    { "item_id": "wood-01", "stock": 8 },
-    { "item_id": "scrap-01", "stock": 25 }
-  ]
-}
+{ "error": "Transaction not found." }
 ```
 ---
 
