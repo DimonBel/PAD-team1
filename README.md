@@ -15,12 +15,12 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 ## Technologies & Communication Patterns
 
-| Owner                    | Services                         | Language & Framework          | Database   | Communication Patterns                                                | Motivation & Trade-offs                                                                                                                                                                                                                                                                   |
-| ------------------------ | -------------------------------- | ----------------------------- | ---------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dmitrii Belih            | Player Service, Game Service     | Elixir, Phoenix               | PostgreSQL | REST with JWT auth, WebSockets (Phoenix Channels), async timers, CQRS | Phoenix's secure auth plugs and channels are ideal for player identity and real-time gameplay. Elixir's lightweight processes and OTP supervision handle high-concurrency lobbies, day/night cycles and live action progress over WebSockets.                                             |
-| Alexandra Mihalevschi    | Exam Service, World Service      | Elixir, Phoenix               | PostgreSQL | REST, Async event-driven updates (PubSub), notifications, CQRS        | Elixir's OTP supervision gives us fault-tolerant exam grading workflows and reliable world-state mutations. Phoenix PubSub makes fanning out `ExamPassed` events to the World Service and achievements effortless.                                                                        |
-| Ivan Rudenco             | Zombie Service, Resource Service | Ruby, Sinatra | PostgreSQL | REST, Idempotent operations, Async notification queues, CQRS          | Sinatra on Rack keeps zombie-config endpoints lightweight and read-friendly. `dry-schema` validates inbound payloads at the controller boundary. Idempotent resource operations (gain / consume / transfer) are protected by a unique `event_id` index and executed inside `Sequel.transaction { ... }` blocks against PostgreSQL.                                       |
-| Bujor - Cobili Alexandra | Base Service, Crafting Service   | Ruby, Sinatra | PostgreSQL | REST, Atomic transactions, Async event-driven updates, CQRS           | Sinatra modular apps (`Sinatra::Base` subclasses) keep base upgrades, Kiki rewards and atomic recipe resolution isolated and unit-testable. `Sequel.transaction` makes consume-then-credit flows atomic against PostgreSQL, while `dry-events` (or `wisper`) publishers emit `inventory.changed` events that the Player Service consumes via Sidekiq (or `good_job`) queues. |
+| Owner                    | Services                         | Language & Framework | Database   | Communication Patterns                                                | Motivation & Trade-offs                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | -------------------------------- | -------------------- | ---------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dmitrii Belih            | Player Service, Game Service     | Elixir, Phoenix      | PostgreSQL | REST with JWT auth, WebSockets (Phoenix Channels), async timers, CQRS | Phoenix's secure auth plugs and channels are ideal for player identity and real-time gameplay. Elixir's lightweight processes and OTP supervision handle high-concurrency lobbies, day/night cycles and live action progress over WebSockets.                                                                                                                                |
+| Alexandra Mihalevschi    | Exam Service, World Service      | Elixir, Phoenix      | PostgreSQL | REST, Async event-driven updates (PubSub), notifications, CQRS        | Elixir's OTP supervision gives us fault-tolerant exam grading workflows and reliable world-state mutations. Phoenix PubSub makes fanning out `ExamPassed` events to the World Service and achievements effortless.                                                                                                                                                           |
+| Ivan Rudenco             | Zombie Service, Resource Service | Ruby, Sinatra        | PostgreSQL | REST, Idempotent operations, Async notification queues, CQRS          | Sinatra on Rack keeps zombie-config endpoints lightweight and read-friendly. `dry-schema` validates inbound payloads at the controller boundary. Idempotent resource operations (gain / consume / transfer) are protected by a unique `event_id` index and executed inside `Sequel.transaction { ... }` blocks against PostgreSQL.                                           |
+| Bujor - Cobili Alexandra | Base Service, Crafting Service   | Ruby, Sinatra        | PostgreSQL | REST, Atomic transactions, Async event-driven updates, CQRS           | Sinatra modular apps (`Sinatra::Base` subclasses) keep base upgrades, Kiki rewards and atomic recipe resolution isolated and unit-testable. `Sequel.transaction` makes consume-then-credit flows atomic against PostgreSQL, while `dry-events` (or `wisper`) publishers emit `inventory.changed` events that the Player Service consumes via Sidekiq (or `good_job`) queues. |
 
 ## Architectural Diagram
 
@@ -28,9 +28,7 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 The architectural diagram (provided separately by the team) illustrates how the eight microservices interact through the API Gateway and Service Registry. The Game Service sits at the center of the live game loop, while Player, Resource, Exam, World, Zombie, Base and Crafting Services each own a distinct domain. Inter-service communication is a mix of synchronous REST, asynchronous events and WebSocket fan-out.
 
-## в†’
-
-***
+---
 
 ## Authentication
 
@@ -137,18 +135,42 @@ Payload:
 }
 ```
 
-#### Add XP / Level Up
+#### Delete Player Profile
 
-`POST /api/players/{player_id}/xp`
-Description: Internal endpoint used by Game Service to award XP. Idempotent via `event_id`.
-Headers: `Authorization: Bearer <service_jwt>`
+`DELETE /api/players/{player_id}`
+Description: Deletes the account. Inventory and active trades are released first.
+
+Success Response (204 No Content)
+
+#### Level XP
+
+`GET /api/players/{player_id}/xp`
+Description: Reads the progression counters.
+Payload: —
+
+Success Response (200 OK):
+
+```json
+{
+  "player_id": "player-uuid-123",
+  "xp": 3420,
+  "level": 7,
+  "xp_to_next_level": 580
+}
+```
+
+#### Update XP
+
+`PATCH /api/players/{player_id}/xp`
+Description: Adds or removes XP. Called by Game Service (kills, finished actions), Exam Service (passed exams) and Tourist Zombies (stealing XP). Idempotent through `operation_id`.
 Payload:
 
 ```json
 {
-  "event_id": "evt-uuid-abc",
-  "amount": 50,
-  "reason": "zombie_killed"
+  "operation_id": "xp-op-uuid-555",
+  "delta": 250,
+  "reason": "EXAM_PASSED",
+  "source_service": "exam-service"
 }
 ```
 
@@ -157,9 +179,9 @@ Success Response (200 OK):
 ```json
 {
   "player_id": "player-uuid-123",
-  "xp": 1390,
-  "level": 7,
-  "leveled_up": false
+  "xp": 3670,
+  "level": 8,
+  "leveled_up": true
 }
 ```
 
@@ -179,30 +201,76 @@ Success Response (200 OK):
 ]
 ```
 
-#### Add / Remove Inventory Item
+#### Add Item to Inventory **[internal]**
 
-`PATCH /api/players/{player_id}/inventory`
-Description: Internal endpoint used by Resource / Crafting / Trading flows.
-Headers: `Authorization: Bearer <service_jwt>`
+`POST /api/players/{player_id}/inventory`
+Description: Puts an item in the inventory. Called by Crafting Service (crafted object), World Service (Kiki reward) and Game Service (loot). Idempotent through `operation_id`.
 Payload:
 
 ```json
 {
-  "operation": "add",
-  "item_id": "coffee-01",
-  "count": 1,
-  "event_id": "evt-uuid-xyz"
+  "operation_id": "grant-uuid-901",
+  "code": "ZOMBIE_DETECTOR",
+  "type": "equipment",
+  "quantity": 1,
+  "source": "crafting-service"
 }
 ```
 
-#### Add Friend
+Success Response (201 Created):
 
-`POST /api/players/{player_id}/friends`
-Headers: `Authorization: Bearer <jwt>`
+```json
+{
+  "item_id": "item-uuid-12",
+  "code": "ZOMBIE_DETECTOR",
+  "quantity": 1
+}
+```
+
+#### Update / Consume Item
+
+`PATCH /api/players/{player_id}/inventory/{item_id}`
+Description: Changes the quantity of an item. Consuming a Coffee is `delta: -1`; the record stays at quantity 0 instead of being deleted (CRU only).
 Payload:
 
 ```json
-{ "friend_id": "player-uuid-456" }
+{
+  "operation_id": "consume-uuid-33",
+  "delta": -1,
+  "reason": "CONSUMED"
+}
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "item_id": "item-uuid-1",
+  "code": "COFFEE",
+  "quantity": 2
+}
+```
+
+### Add Friend
+
+`POST /api/players/{player_id}/friends`
+Description: Sends a friend request.
+Payload:
+
+```json
+{
+  "target_player_id": "player-uuid-456"
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "friendship_id": "friend-uuid-10",
+  "target_player_id": "player-uuid-456",
+  "status": "PENDING"
+}
 ```
 
 #### Get Friends List
@@ -215,14 +283,99 @@ Success Response (200 OK):
 [{ "player_id": "player-uuid-456", "username": "kiki", "status": "online" }]
 ```
 
-#### Update Presence
+#### Remove Friend
 
-`POST /api/players/{player_id}/presence`
-Headers: `Authorization: Bearer <jwt>`
+`DELETE /api/players/{player_id}/friends/{friendship_id}`
+Description: Removes the friendship or cancels the request.
+Payload: —
+
+Success Response (204 No Content)
+
+#### Create a Trade
+
+`POST /api/trades`
+Description: Opens a trade offer towards another player. Works across lobbies/universities. Ownership of every offered item is verified here and the items are locked until the trade resolves.
 Payload:
 
 ```json
-{ "status": "in_game", "lobby_id": "lobby-uuid-789" }
+{
+  "from_player_id": "player-uuid-123",
+  "to_player_id": "player-uuid-456",
+  "offered_items": [{ "item_id": "item-uuid-9", "quantity": 1 }],
+  "requested_items": [{ "code": "ENERGY_DRINK", "quantity": 2 }]
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "trade_id": "trade-uuid-77",
+  "status": "PENDING",
+  "expires_at": "2026-09-10T14:15:00Z"
+}
+```
+
+Errors: `403 ITEM_NOT_OWNED`, `409 ITEM_ALREADY_LOCKED`
+
+#### Accept a Trade
+
+`POST /api/trades/{trade_id}/accept`
+Description: Executes the transfer atomically — both sides move or neither does. On failure everything is rolled back and the items unlocked.
+Payload:
+
+```json
+{
+  "player_id": "player-uuid-456"
+}
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "trade_id": "trade-uuid-77",
+  "status": "COMPLETED",
+  "completed_at": "2026-09-10T14:06:40Z"
+}
+```
+
+Errors: `409 TRADE_EXPIRED`, `409 REQUESTED_ITEMS_MISSING`
+
+#### Reject / Cancel a Trade
+
+`POST /api/trades/{trade_id}/reject`
+Description: Cancels the offer and unlocks the items. Callable by either side.
+Payload: —
+
+Success Response (200 OK):
+
+```json
+{
+  "trade_id": "trade-uuid-77",
+  "status": "REJECTED"
+}
+```
+
+#### List Trades
+
+`GET /api/trades?player_id={player_id}&status=PENDING`
+Description: Returns the trades a player is involved in.
+Payload: —
+
+Success Response (200 OK):
+
+```json
+{
+  "trades": [
+    {
+      "trade_id": "trade-uuid-77",
+      "from_player_id": "player-uuid-123",
+      "to_player_id": "player-uuid-456",
+      "status": "PENDING"
+    }
+  ]
+}
 ```
 
 ---
@@ -292,6 +445,77 @@ Payload:
 { "player_id": "player-uuid-456" }
 ```
 
+#### Start a Session
+
+`POST /api/lobbies/{lobby_id}/start`
+Description: Host starts the game. Game Service pulls the map from World Service and the zombie configurations from Zombie Service, then begins the first day.
+Payload:
+
+```json
+{
+  "cycle_duration_seconds": 300,
+  "semester_length_cycles": 14
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "session_id": "session-uuid-900",
+  "lobby_id": "lobby-uuid-77",
+  "cycle": "DAY",
+  "cycle_number": 1,
+  "map_id": "map-uuid-5",
+  "started_at": "2026-09-10T14:00:00Z"
+}
+```
+
+Errors: `403 NOT_LOBBY_HOST`, `409 NOT_ENOUGH_PLAYERS`
+
+#### Get Session State
+
+`GET /api/sessions/{session_id}`
+Description: Snapshot of the running game — used on reconnect before the WebSocket takes over.
+Payload: —
+
+Success Response (200 OK):
+
+```json
+{
+  "session_id": "session-uuid-900",
+  "status": "RUNNING",
+  "cycle": "NIGHT",
+  "cycle_number": 4,
+  "cycle_ends_at": "2026-09-10T14:25:00Z",
+  "alive_zombies": 12,
+  "players": [
+    {
+      "player_id": "player-uuid-123",
+      "health": 80,
+      "current_room_id": "room-uuid-3"
+    }
+  ]
+}
+```
+
+#### End a Session
+
+`POST /api/sessions/{session_id}/end`
+Description: Ends the semester. Final XP is pushed to Player Service, results to Exam Service.
+Payload: —
+
+Success Response (200 OK):
+
+```json
+{
+  "session_id": "session-uuid-900",
+  "status": "FINISHED",
+  "survivors": ["player-uuid-123"],
+  "cycles_survived": 14
+}
+```
+
 #### Start a Timed Action
 
 `POST /api/game/lobbies/{lobby_id}/actions`
@@ -325,61 +549,63 @@ Error Response (409 Conflict):
 { "error": "Player already has an active action." }
 ```
 
+#### Get Action Status
+
+`GET /api/sessions/{session_id}/actions/{action_id}`
+Description: Polling fallback for when the WebSocket dropped. On completion the reward comes from Resource Service, this service only reports it.
+Payload: —
+
+Success Response (200 OK):
+
 #### Cancel an Action
 
 `DELETE /api/game/actions/{action_id}`
 Headers: `Authorization: Bearer <jwt>`
 
-#### Initiate a Trade
+#### Zombie Action **[internal]**
 
-`POST /api/game/lobbies/{lobby_id}/trades`
-Description: Initiates a player-to-player trade. Validates ownership and performs the inventory transfer atomically.
-Headers: `Authorization: Bearer <jwt>`
+`POST /api/sessions/{session_id}/zombie-actions`
+Description: An action issued by a zombie instance instead of a player, as part of the behavior Game Service drives during the current cycle. A `PROFESSOR` zombie triggers an exam request towards Exam Service; a `TOURIST` zombie steals resources or XP. Same async contract as player actions — `202` plus a WebSocket event — different actor. The `zombie_id` is only valid within the cycle that spawned it.
 Payload:
 
 ```json
 {
-  "from_player_id": "player-uuid-123",
-  "to_player_id": "player-uuid-456",
-  "offer": [{ "item_id": "coffee-01", "count": 2 }],
-  "request": [{ "item_id": "metal-01", "count": 5 }],
-  "cross_university": true
+  "zombie_id": "zombie-uuid-31",
+  "zombie_type": "PROFESSOR",
+  "action": "ADMINISTER_EXAM",
+  "target_player_id": "player-uuid-123",
+  "room_id": "room-uuid-3"
 }
 ```
 
-Success Response (200 OK):
-
-```json
-{ "trade_id": "trade-uuid-001", "status": "completed" }
-```
-
-Error Response (409 Conflict):
-
-```json
-{ "error": "Insufficient items to complete trade." }
-```
-
-#### Trigger Zombie Encounter
-
-`POST /api/game/lobbies/{lobby_id}/encounters`
-Headers: `Authorization: Bearer <service_jwt>` (called by Zombie Service tick)
-Payload:
+Success Response (202 Accepted):
 
 ```json
 {
-  "player_id": "player-uuid-123",
-  "zombie_type": "professor_zombie",
-  "room_id": "exam-hall-3"
+  "action_id": "zaction-uuid-77",
+  "status": "IN_PROGRESS",
+  "exam_id": "exam-uuid-14",
+  "deadline_seconds": 120
 }
 ```
 
-Success Response (200 OK):
+Tourist variant:
 
 ```json
 {
-  "encounter_id": "encounter-uuid-001",
-  "exam_requested": true,
-  "exam_id": "exam-uuid-555"
+  "zombie_id": "zombie-uuid-52",
+  "zombie_type": "TOURIST",
+  "action": "STEAL",
+  "target_player_id": "player-uuid-123",
+  "steal_target": "XP"
+}
+```
+
+```json
+{
+  "action_id": "zaction-uuid-78",
+  "status": "COMPLETED",
+  "stolen": { "type": "XP", "amount": 40 }
 }
 ```
 
@@ -392,7 +618,7 @@ Headers: `Authorization: Bearer <service_jwt>`
 
 `wss://api.undead/ws/game/lobbies/{lobby_id}?token=<JWT>`
 
-#### Client в†’ Server Events
+#### Client Server Events
 
 ```json
 { "type": "join_lobby",  "lobby_id": "lobby-uuid-789" }
@@ -400,7 +626,7 @@ Headers: `Authorization: Bearer <service_jwt>`
 { "type": "action_progress_request", "action_id": "action-uuid-001" }
 ```
 
-#### Server в†’ Client Events
+#### Server Client Events
 
 ```json
 { "type": "action_started",   "action_id": "...", "player_id": "...", "duration_seconds": 600 }
@@ -573,9 +799,7 @@ Payload:
 {
   "event_id": "evt-uuid-steal-002",
   "player_id": "player-uuid-123",
-  "items": [
-    { "item_id": "sandwich-01", "count": 1 }
-  ]
+  "items": [{ "item_id": "sandwich-01", "count": 1 }]
 }
 ```
 
@@ -824,6 +1048,7 @@ Success Response (200 OK):
   ]
 }
 ```
+
 ---
 
 ## Service Boundaries (Exam Service & World Service)
@@ -856,14 +1081,14 @@ progress).
 **Does not own** — explicitly out of scope, even though related:
 
 - Resource quantities/economy (gain/consume/transfer of wood, metal, paper, food) — **Resource
-  Service**; World Service only owns that a node *exists* in a room, not how much it currently
+  Service**; World Service only owns that a node _exists_ in a room, not how much it currently
   yields.
 - What players have built or upgraded within a room (facilities, defensive improvements beyond
   the raw barricade level) — **Base Service**.
 - Kiki's reward interactions — **Base Service**; World Service only owns that FAFCab is a room
   on the map, not the reward mechanic that happens inside it.
 - Zombie type definitions, stats or behavior — **Zombie Service**; World Service only owns
-  *where* a zombie type is allowed to spawn, not what that type is.
+  _where_ a zombie type is allowed to spawn, not what that type is.
 - Player inventory or crafted item storage — **Player Service**.
 - Exam attempts, grading or achievement rules — **Exam Service**; World Service only reacts to
   the `ExamPassed` notification, it never decides an exam is passed.
@@ -914,7 +1139,12 @@ Payload:
 Success Response (201 Created):
 
 ```json
-{ "exam_id": "exam-uuid-556", "course_id": "math-101", "title": "Calculus Final", "difficulty": "hard" }
+{
+  "exam_id": "exam-uuid-556",
+  "course_id": "math-101",
+  "title": "Calculus Final",
+  "difficulty": "hard"
+}
 ```
 
 #### List Exams
@@ -926,7 +1156,14 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-[{ "exam_id": "exam-uuid-555", "course_id": "math-101", "title": "Calculus Midterm", "difficulty": "medium" }]
+[
+  {
+    "exam_id": "exam-uuid-555",
+    "course_id": "math-101",
+    "title": "Calculus Midterm",
+    "difficulty": "medium"
+  }
+]
 ```
 
 #### Get Exam Details
@@ -938,7 +1175,12 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-{ "exam_id": "exam-uuid-555", "course_id": "math-101", "title": "Calculus Midterm", "difficulty": "medium" }
+{
+  "exam_id": "exam-uuid-555",
+  "course_id": "math-101",
+  "title": "Calculus Midterm",
+  "difficulty": "medium"
+}
 ```
 
 Error Response (404 Not Found):
@@ -962,7 +1204,12 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "exam_id": "exam-uuid-555", "course_id": "math-101", "title": "Calculus Midterm", "difficulty": "medium" }
+{
+  "exam_id": "exam-uuid-555",
+  "course_id": "math-101",
+  "title": "Calculus Midterm",
+  "difficulty": "medium"
+}
 ```
 
 #### Create a Course
@@ -974,13 +1221,21 @@ Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
 Payload:
 
 ```json
-{ "course_id": "math-101", "name": "Calculus I", "required_exam_ids": ["exam-uuid-555", "exam-uuid-556"] }
+{
+  "course_id": "math-101",
+  "name": "Calculus I",
+  "required_exam_ids": ["exam-uuid-555", "exam-uuid-556"]
+}
 ```
 
 Success Response (201 Created):
 
 ```json
-{ "course_id": "math-101", "name": "Calculus I", "required_exam_ids": ["exam-uuid-555", "exam-uuid-556"] }
+{
+  "course_id": "math-101",
+  "name": "Calculus I",
+  "required_exam_ids": ["exam-uuid-555", "exam-uuid-556"]
+}
 ```
 
 #### List Courses
@@ -1004,7 +1259,11 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-{ "course_id": "math-101", "name": "Calculus I", "required_exam_ids": ["exam-uuid-555", "exam-uuid-556"] }
+{
+  "course_id": "math-101",
+  "name": "Calculus I",
+  "required_exam_ids": ["exam-uuid-555", "exam-uuid-556"]
+}
 ```
 
 #### Update a Course
@@ -1021,7 +1280,11 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "course_id": "math-101", "name": "Calculus I", "required_exam_ids": ["exam-uuid-555", "exam-uuid-556", "exam-uuid-560"] }
+{
+  "course_id": "math-101",
+  "name": "Calculus I",
+  "required_exam_ids": ["exam-uuid-555", "exam-uuid-556", "exam-uuid-560"]
+}
 ```
 
 #### List Exam Questions
@@ -1034,7 +1297,14 @@ Headers: `Authorization: Bearer <service_jwt>` (internal/moderator tooling only)
 Success Response (200 OK):
 
 ```json
-[{ "question_id": "q-1", "text": "2 + 2 = ?", "options": ["3", "4", "5"], "correct_answer": "4" }]
+[
+  {
+    "question_id": "q-1",
+    "text": "2 + 2 = ?",
+    "options": ["3", "4", "5"],
+    "correct_answer": "4"
+  }
+]
 ```
 
 #### Start an Exam Attempt
@@ -1047,7 +1317,11 @@ Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
 ```json
-{ "player_id": "player-uuid-123", "course_id": "math-101", "encounter_id": "encounter-uuid-001" }
+{
+  "player_id": "player-uuid-123",
+  "course_id": "math-101",
+  "encounter_id": "encounter-uuid-001"
+}
 ```
 
 Success Response (201 Created):
@@ -1056,7 +1330,9 @@ Success Response (201 Created):
 {
   "attempt_id": "attempt-uuid-777",
   "exam_id": "exam-uuid-555",
-  "questions": [{ "question_id": "q-1", "text": "2 + 2 = ?", "options": ["3", "4", "5"] }],
+  "questions": [
+    { "question_id": "q-1", "text": "2 + 2 = ?", "options": ["3", "4", "5"] }
+  ],
   "expires_at": "2026-09-08T10:10:00Z"
 }
 ```
@@ -1090,7 +1366,9 @@ Success Response (200 OK):
 Error Response (409 Conflict):
 
 ```json
-{ "error": "Cannot submit an answer after the attempt has already been graded." }
+{
+  "error": "Cannot submit an answer after the attempt has already been graded."
+}
 ```
 
 #### Finalize and Grade an Exam Attempt
@@ -1111,7 +1389,12 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "attempt_id": "attempt-uuid-777", "score": 90, "passed": true, "achievements_unlocked": ["survived_the_pumpkin"] }
+{
+  "attempt_id": "attempt-uuid-777",
+  "score": 90,
+  "passed": true,
+  "achievements_unlocked": ["survived_the_pumpkin"]
+}
 ```
 
 Error Response (410 Gone):
@@ -1150,7 +1433,12 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-{ "attempt_id": "attempt-uuid-777", "exam_id": "exam-uuid-555", "status": "in_progress", "expires_at": "2026-09-08T10:10:00Z" }
+{
+  "attempt_id": "attempt-uuid-777",
+  "exam_id": "exam-uuid-555",
+  "status": "in_progress",
+  "expires_at": "2026-09-08T10:10:00Z"
+}
 ```
 
 #### Submit an Answer
@@ -1176,7 +1464,9 @@ Success Response (200 OK):
 Error Response (409 Conflict):
 
 ```json
-{ "error": "Cannot submit an answer after the attempt has already been graded." }
+{
+  "error": "Cannot submit an answer after the attempt has already been graded."
+}
 ```
 
 #### Finalize and Grade an Exam Attempt
@@ -1197,7 +1487,12 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "attempt_id": "attempt-uuid-777", "score": 90, "passed": true, "achievements_unlocked": ["survived_the_pumpkin"] }
+{
+  "attempt_id": "attempt-uuid-777",
+  "score": 90,
+  "passed": true,
+  "achievements_unlocked": ["survived_the_pumpkin"]
+}
 ```
 
 Error Response (410 Gone):
@@ -1255,7 +1550,14 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-[{ "exam_id": "exam-uuid-555", "course_id": "math-101", "status": "passed", "grade": 90 }]
+[
+  {
+    "exam_id": "exam-uuid-555",
+    "course_id": "math-101",
+    "status": "passed",
+    "grade": 90
+  }
+]
 ```
 
 #### Get Player Achievements
@@ -1266,7 +1568,12 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-[{ "achievement_id": "survived_the_pumpkin", "unlocked_at": "2026-09-08T10:09:00Z" }]
+[
+  {
+    "achievement_id": "survived_the_pumpkin",
+    "unlocked_at": "2026-09-08T10:09:00Z"
+  }
+]
 ```
 
 #### Create a Player Academic Record
@@ -1285,7 +1592,12 @@ Payload:
 Success Response (201 Created):
 
 ```json
-{ "player_id": "player-uuid-123", "grades": [], "achievements": [], "diploma_progress": { "courses_completed": 0, "courses_required": 5 } }
+{
+  "player_id": "player-uuid-123",
+  "grades": [],
+  "achievements": [],
+  "diploma_progress": { "courses_completed": 0, "courses_required": 5 }
+}
 ```
 
 #### Get Player Academic Record
@@ -1300,7 +1612,12 @@ Success Response (200 OK):
 {
   "player_id": "player-uuid-123",
   "grades": [{ "course_id": "math-101", "grade": 90 }],
-  "achievements": [{ "achievement_id": "survived_the_pumpkin", "unlocked_at": "2026-09-08T10:09:00Z" }],
+  "achievements": [
+    {
+      "achievement_id": "survived_the_pumpkin",
+      "unlocked_at": "2026-09-08T10:09:00Z"
+    }
+  ],
   "diploma_progress": { "courses_completed": 1, "courses_required": 5 }
 }
 ```
@@ -1320,7 +1637,12 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "player_id": "player-uuid-123", "grades": [{ "course_id": "math-101", "grade": 95 }], "achievements": [], "diploma_progress": { "courses_completed": 1, "courses_required": 5 } }
+{
+  "player_id": "player-uuid-123",
+  "grades": [{ "course_id": "math-101", "grade": 95 }],
+  "achievements": [],
+  "diploma_progress": { "courses_completed": 1, "courses_required": 5 }
+}
 ```
 
 #### Delete a Player Academic Record
@@ -1367,13 +1689,21 @@ Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
 Payload:
 
 ```json
-{ "name": "FAF Campus", "initial_zone": { "zone_id": "zone-cab", "name": "FAF Cab" } }
+{
+  "name": "FAF Campus",
+  "initial_zone": { "zone_id": "zone-cab", "name": "FAF Cab" }
+}
 ```
 
 Success Response (201 Created):
 
 ```json
-{ "map_id": "map-uuid-001", "name": "FAF Campus", "version": 1, "zones": ["zone-cab"] }
+{
+  "map_id": "map-uuid-001",
+  "name": "FAF Campus",
+  "version": 1,
+  "zones": ["zone-cab"]
+}
 ```
 
 #### Get the Campus Map
@@ -1385,7 +1715,12 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-{ "map_id": "map-uuid-001", "name": "FAF Campus", "version": 3, "zones": ["zone-cab", "zone-math-wing"] }
+{
+  "map_id": "map-uuid-001",
+  "name": "FAF Campus",
+  "version": 3,
+  "zones": ["zone-cab", "zone-math-wing"]
+}
 ```
 
 #### Update the Campus Map
@@ -1403,7 +1738,12 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "map_id": "map-uuid-001", "name": "FAF Campus — Autumn 2026", "version": 4, "zones": ["zone-cab", "zone-math-wing"] }
+{
+  "map_id": "map-uuid-001",
+  "name": "FAF Campus — Autumn 2026",
+  "version": 4,
+  "zones": ["zone-cab", "zone-math-wing"]
+}
 ```
 
 #### Set Room Coordinates
@@ -1453,7 +1793,7 @@ Success Response (200 OK):
 { "room_id": "lab-a1", "x": 5, "y": 2 }
 ```
 
-#### Remove Room Coordinates *(proposed — confirm before implementing)*
+#### Remove Room Coordinates _(proposed — confirm before implementing)_
 
 `DELETE /api/world/rooms/{room_id}/coordinates`
 Description: Unplaces a room from the visible map grid without deleting the room record
@@ -1480,7 +1820,11 @@ Payload:
 Success Response (201 Created):
 
 ```json
-{ "spawn_id": "spawn-1", "room_id": "exam-hall-3", "zombie_type": "professor_zombie" }
+{
+  "spawn_id": "spawn-1",
+  "room_id": "exam-hall-3",
+  "zombie_type": "professor_zombie"
+}
 ```
 
 #### List Zombie Spawn Points
@@ -1492,7 +1836,13 @@ Headers: `Authorization: Bearer <service_jwt>`
 Success Response (200 OK):
 
 ```json
-[{ "spawn_id": "spawn-1", "room_id": "exam-hall-3", "zombie_type": "professor_zombie" }]
+[
+  {
+    "spawn_id": "spawn-1",
+    "room_id": "exam-hall-3",
+    "zombie_type": "professor_zombie"
+  }
+]
 ```
 
 #### Update a Zombie Spawn Point
@@ -1509,14 +1859,18 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "spawn_id": "spawn-1", "room_id": "exam-hall-3", "zombie_type": "tourist_zombie" }
+{
+  "spawn_id": "spawn-1",
+  "room_id": "exam-hall-3",
+  "zombie_type": "tourist_zombie"
+}
 ```
 
 #### Create a Resource Node
 
 `POST /api/world/rooms/{room_id}/resource-nodes`
 Description: Places a new resource node in a room, e.g. seeding a Laboratory's metal-scrap
-node when the room is created. World Service owns *that a node exists here*; Resource Service
+node when the room is created. World Service owns _that a node exists here_; Resource Service
 owns the economy-wide quantities it produces.
 Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
 Payload:
@@ -1528,7 +1882,12 @@ Payload:
 Success Response (201 Created):
 
 ```json
-{ "node_id": "node-2", "room_id": "lab-a1", "resource": "metal_scraps", "remaining": 50 }
+{
+  "node_id": "node-2",
+  "room_id": "lab-a1",
+  "resource": "metal_scraps",
+  "remaining": 50
+}
 ```
 
 #### List Resource Nodes in a Room
@@ -1540,7 +1899,14 @@ Headers: `Authorization: Bearer <service_jwt>`
 Success Response (200 OK):
 
 ```json
-[{ "node_id": "node-1", "room_id": "lab-a1", "resource": "metal_scraps", "remaining": 40 }]
+[
+  {
+    "node_id": "node-1",
+    "room_id": "lab-a1",
+    "resource": "metal_scraps",
+    "remaining": 40
+  }
+]
 ```
 
 #### Update a Resource Node
@@ -1558,10 +1924,15 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "node_id": "node-1", "room_id": "lab-a1", "resource": "metal_scraps", "remaining": 35 }
+{
+  "node_id": "node-1",
+  "room_id": "lab-a1",
+  "resource": "metal_scraps",
+  "remaining": 35
+}
 ```
 
-#### Remove a Resource Node *(proposed — confirm before implementing)*
+#### Remove a Resource Node _(proposed — confirm before implementing)_
 
 `DELETE /api/world/rooms/{room_id}/resource-nodes/{node_id}`
 Description: Removes a node entirely if a room's layout changes (e.g. Laboratory converted to
@@ -1589,7 +1960,13 @@ Payload:
 Success Response (201 Created):
 
 ```json
-{ "room_id": "classroom-b2", "zone_id": "zone-math-wing", "type": "classroom", "resource": "textbooks", "barricade_level": 0 }
+{
+  "room_id": "classroom-b2",
+  "zone_id": "zone-math-wing",
+  "type": "classroom",
+  "resource": "textbooks",
+  "barricade_level": 0
+}
 ```
 
 #### List Rooms
@@ -1601,7 +1978,15 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-[{ "room_id": "lab-a1", "zone_id": "zone-cab", "type": "laboratory", "resource": "metal_scraps", "barricade_level": 1 }]
+[
+  {
+    "room_id": "lab-a1",
+    "zone_id": "zone-cab",
+    "type": "laboratory",
+    "resource": "metal_scraps",
+    "barricade_level": 1
+  }
+]
 ```
 
 #### Get Room Details
@@ -1615,7 +2000,9 @@ Success Response (200 OK):
   "room_id": "lab-a1",
   "zone_id": "zone-cab",
   "type": "laboratory",
-  "resource_nodes": [{ "node_id": "node-1", "resource": "metal_scraps", "remaining": 40 }],
+  "resource_nodes": [
+    { "node_id": "node-1", "resource": "metal_scraps", "remaining": 40 }
+  ],
   "barricade_level": 1
 }
 ```
@@ -1635,7 +2022,13 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "room_id": "lab-a1", "zone_id": "zone-cab", "type": "library", "resource": "paper", "barricade_level": 1 }
+{
+  "room_id": "lab-a1",
+  "zone_id": "zone-cab",
+  "type": "library",
+  "resource": "paper",
+  "barricade_level": 1
+}
 ```
 
 #### Update Room Barricade Level
@@ -1682,7 +2075,10 @@ Headers: `Authorization: Bearer <jwt>`
 Success Response (200 OK):
 
 ```json
-[{ "zone_id": "zone-cab", "name": "FAF Cab", "unlocked": true }, { "zone_id": "zone-math-wing", "name": "Math Wing", "unlocked": false }]
+[
+  { "zone_id": "zone-cab", "name": "FAF Cab", "unlocked": true },
+  { "zone_id": "zone-math-wing", "name": "Math Wing", "unlocked": false }
+]
 ```
 
 #### Get Zone Details
@@ -1700,7 +2096,7 @@ Success Response (200 OK):
 #### Update a Zone
 
 `PATCH /api/world/zones/{zone_id}`
-Description: Manual edits (e.g. renaming a wing). The actual lock→unlock *transition* keeps
+Description: Manual edits (e.g. renaming a wing). The actual lock→unlock _transition_ keeps
 its own dedicated action endpoint below since it's event-sourced from the Exam Service.
 Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
 Payload:
@@ -1712,7 +2108,11 @@ Payload:
 Success Response (200 OK):
 
 ```json
-{ "zone_id": "zone-math-wing", "name": "Renovated Math Wing", "unlocked": false }
+{
+  "zone_id": "zone-math-wing",
+  "name": "Renovated Math Wing",
+  "unlocked": false
+}
 ```
 
 #### Unlock New Section (Exam Passed)
@@ -1725,13 +2125,22 @@ Headers: `Authorization: Bearer <service_jwt>`
 Payload:
 
 ```json
-{ "event_id": "evt-uuid-555", "player_id": "player-uuid-123", "course_id": "math-101", "achievement_id": "survived_the_pumpkin" }
+{
+  "event_id": "evt-uuid-555",
+  "player_id": "player-uuid-123",
+  "course_id": "math-101",
+  "achievement_id": "survived_the_pumpkin"
+}
 ```
 
 Success Response (200 OK):
 
 ```json
-{ "zone_id": "zone-math-wing", "unlocked": true, "rooms_added": ["classroom-b2", "lib-b1"] }
+{
+  "zone_id": "zone-math-wing",
+  "unlocked": true,
+  "rooms_added": ["classroom-b2", "lib-b1"]
+}
 ```
 
 ---
