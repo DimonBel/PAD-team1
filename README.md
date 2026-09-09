@@ -826,7 +826,51 @@ Success Response (200 OK):
 ```
 ---
 
-## 3. Exam Service
+## Service Boundaries (Exam Service & World Service)
+
+### Exam Service
+
+**Owns:** the exam catalog (`exams`, `courses`, the static `questions` bank), `exam-attempts`
+(submission + grading), and each player's academic record (`grades`, `achievements`, `diploma`
+progress).
+
+**Does not own** — explicitly out of scope, even though related:
+
+- The campus map, zones, rooms or coordinates — **World Service**.
+- Triggering or resolving a zombie encounter itself — **Game Service**; Exam Service only opens
+  an attempt when asked, it never decides that an encounter happened.
+- Player identity, authentication, XP/level or inventory — **Player Service**.
+- Actually crediting a reward item/XP into a player's inventory — **Player Service**; Exam
+  Service only requests the grant after an achievement unlocks.
+- The resource economy (wood/metal/paper/food quantities) — **Resource Service**.
+- Crafting recipes or their unlock logic — **Crafting Service**; Exam Service only exposes
+  pass/fail status for Crafting Service to query, it doesn't gate recipes itself.
+- Zombie type definitions or behavior (what makes a "Professor Zombie" academic) — **Zombie
+  Service**.
+
+### World Service
+
+**Owns:** the campus `map`, its `zones`, `rooms`, room `coordinates`, `resource-nodes`
+(placement only — not quantities), `zombie-spawns` configuration, and room barricade levels.
+
+**Does not own** — explicitly out of scope, even though related:
+
+- Resource quantities/economy (gain/consume/transfer of wood, metal, paper, food) — **Resource
+  Service**; World Service only owns that a node *exists* in a room, not how much it currently
+  yields.
+- What players have built or upgraded within a room (facilities, defensive improvements beyond
+  the raw barricade level) — **Base Service**.
+- Kiki's reward interactions — **Base Service**; World Service only owns that FAFCab is a room
+  on the map, not the reward mechanic that happens inside it.
+- Zombie type definitions, stats or behavior — **Zombie Service**; World Service only owns
+  *where* a zombie type is allowed to spawn, not what that type is.
+- Player inventory or crafted item storage — **Player Service**.
+- Exam attempts, grading or achievement rules — **Exam Service**; World Service only reacts to
+  the `ExamPassed` notification, it never decides an exam is passed.
+
+---
+
+## 5. Exam Service
 
 Responsible for the **actual academic progression of players**: the exam catalog, the courses
 that group exams together, the static question bank, live exam attempts and each player's
@@ -1023,23 +1067,40 @@ Error Response (409 Conflict):
 { "error": "Player already has an active exam attempt." }
 ```
 
-#### Get Exam Attempt Status
+#### Submit an Answer
 
-`GET /api/exam-attempts/{attempt_id}`
-Description: Returns an attempt's current state. Exists so a player's client can resume/poll
-("how much time is left, has this already been graded?") after a reconnect.
+`POST /api/exam-attempts/{attempt_id}/answers`
+Description: Records (or overwrites) the player's answer to one question as they progress
+through the attempt, instead of requiring the whole exam to be submitted at once. Exists to
+support autosave-as-you-go exam UIs; grading itself still happens via the final `PATCH` below.
+Upserts by `question_id` — resubmitting a question overwrites the previous selection.
 Headers: `Authorization: Bearer <jwt>`
+Payload:
+
+```json
+{ "question_id": "q-1", "selected": "4" }
+```
+
 Success Response (200 OK):
 
 ```json
-{ "attempt_id": "attempt-uuid-777", "exam_id": "exam-uuid-555", "status": "in_progress", "expires_at": "2026-09-08T10:10:00Z" }
+{ "question_id": "q-1", "selected": "4" }
 ```
 
-#### Submit Exam Attempt Answers
+Error Response (409 Conflict):
+
+```json
+{ "error": "Cannot submit an answer after the attempt has already been graded." }
+```
+
+#### Finalize and Grade an Exam Attempt
 
 `PATCH /api/exam-attempts/{attempt_id}`
-Description: Grades the attempt in place. **Idempotent** — resubmitting an already-graded
-`attempt_id` with the same answers returns the stored result rather than re-grading.
+Description: Finalizes the attempt and grades it using whichever answers were recorded via
+"Submit an Answer" above. An `answers` array is optional here — pass one to submit/override
+any remaining answers in the same call for clients that batch instead of autosaving.
+**Idempotent** — resubmitting an already-graded `attempt_id` returns the stored result rather
+than re-grading.
 Headers: `Authorization: Bearer <jwt>`
 Payload:
 
@@ -1056,7 +1117,114 @@ Success Response (200 OK):
 Error Response (410 Gone):
 
 ```json
-{ "error": "Attempt expired before answers were submitted." }
+{ "error": "Attempt expired before it was graded." }
+```
+
+#### Get Exam Attempt Answers
+
+`GET /api/exam-attempts/{attempt_id}/answers`
+Description: Returns the answers recorded for an attempt so far. Mid-attempt, this shows the
+player's currently saved (ungraded) selections, e.g. to resume after a reconnect; after
+grading, each answer is additionally annotated with whether it was correct, so a player can
+review their mistakes or a moderator can audit a disputed grade — without re-exposing the full
+answer key the way "List Exam Questions" does.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[{ "question_id": "q-1", "selected": "4", "correct": true }]
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "No answers submitted yet for this attempt." }
+```
+
+#### Get Exam Attempt Status
+
+`GET /api/exam-attempts/{attempt_id}`
+Description: Returns an attempt's current state. Exists so a player's client can resume/poll
+("how much time is left, has this already been graded?") after a reconnect.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "attempt_id": "attempt-uuid-777", "exam_id": "exam-uuid-555", "status": "in_progress", "expires_at": "2026-09-08T10:10:00Z" }
+```
+
+#### Submit an Answer
+
+`POST /api/exam-attempts/{attempt_id}/answers`
+Description: Records (or overwrites) the player's answer to one question as they progress
+through the attempt, instead of requiring the whole exam to be submitted at once. Exists to
+support autosave-as-you-go exam UIs; grading itself still happens via the final `PATCH` below.
+Upserts by `question_id` — resubmitting a question overwrites the previous selection.
+Headers: `Authorization: Bearer <jwt>`
+Payload:
+
+```json
+{ "question_id": "q-1", "selected": "4" }
+```
+
+Success Response (200 OK):
+
+```json
+{ "question_id": "q-1", "selected": "4" }
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Cannot submit an answer after the attempt has already been graded." }
+```
+
+#### Finalize and Grade an Exam Attempt
+
+`PATCH /api/exam-attempts/{attempt_id}`
+Description: Finalizes the attempt and grades it using whichever answers were recorded via
+"Submit an Answer" above. An `answers` array is optional here — pass one to submit/override
+any remaining answers in the same call for clients that batch instead of autosaving.
+**Idempotent** — resubmitting an already-graded `attempt_id` returns the stored result rather
+than re-grading.
+Headers: `Authorization: Bearer <jwt>`
+Payload:
+
+```json
+{ "answers": [{ "question_id": "q-1", "selected": "4" }] }
+```
+
+Success Response (200 OK):
+
+```json
+{ "attempt_id": "attempt-uuid-777", "score": 90, "passed": true, "achievements_unlocked": ["survived_the_pumpkin"] }
+```
+
+Error Response (410 Gone):
+
+```json
+{ "error": "Attempt expired before it was graded." }
+```
+
+#### Get Exam Attempt Answers
+
+`GET /api/exam-attempts/{attempt_id}/answers`
+Description: Returns the answers recorded for an attempt so far. Mid-attempt, this shows the
+player's currently saved (ungraded) selections, e.g. to resume after a reconnect; after
+grading, each answer is additionally annotated with whether it was correct, so a player can
+review their mistakes or a moderator can audit a disputed grade — without re-exposing the full
+answer key the way "List Exam Questions" does.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[{ "question_id": "q-1", "selected": "4", "correct": true }]
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "No answers submitted yet for this attempt." }
 ```
 
 #### Cancel an Exam Attempt
@@ -1169,7 +1337,7 @@ Success Response (200 OK):
 
 ---
 
-## 4. World Service
+## 6. World Service
 
 Creates and owns the **persistent physical state of the university**: the overall campus map,
 its zones, rooms and their coordinates, resource node placement, barricade levels and zombie
