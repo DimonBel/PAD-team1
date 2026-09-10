@@ -2328,6 +2328,811 @@ Success Response (200 OK):
 ```
 
 ---
+## 7. Base Service
+
+Responsible for the **player's survival base**, initially the FAF Cab room. Owns what the players have **built or changed** inside the campus geography: annexed rooms, barricades, facilities, storage capacity, decorations and Kiki. World Service owns the geography itself; Resource Service owns the stock that gets spent. Every mutating call is idempotent via `event_id` and runs inside a single `Sequel.transaction { ... }` together with the Resource Service consume call.
+
+### Responsibilities
+
+- CRUD the base of a lobby (one base per session, seeded with the FAF Cab room).
+- Annex rooms into the base and track their reinforcement state.
+- Build, repair, reinforce and destroy barricades; report the new level to World Service.
+- Build and upgrade facilities (workbench, coffee machine, infirmary, watchtower, ...).
+- Unlock storage capacity and track decorations of the homeroom.
+- Own the upgrade catalog with resource costs and unlock requirements.
+- Handle Kiki interactions: consume food via Resource Service, grant a random booster via Player Service.
+- Spend resources only through Resource Service (`PATCH /api/resources/entities/base/{base_id}` with `operation: remove`).
+
+### Dependencies
+
+| Calls | Endpoint | Why |
+| --- | --- | --- |
+| Resource Service | `PATCH /api/resources/entities/base/{base_id}` (`remove`) | spend wood / metal / food for any build, upgrade or feeding |
+| Resource Service | `GET /api/resources/entities/base/{base_id}` | pre-check stock before starting a build |
+| World Service | `POST /api/world/rooms/{room_id}/barricades` | reflect the new barricade level on the map |
+| World Service | `GET /api/world/rooms/{room_id}` | verify a room exists and is cleared before annexing it |
+| Player Service | `POST /api/players/{player_id}/inventory` | put Kiki's booster into the player's inventory |
+| Player Service | `GET /api/players/{player_id}/xp` | level-gated upgrades |
+
+Called by: Game Service (result of `barricade` / `repair` / `upgrade` timed actions, zombie damage on barricades), clients (base screen, Kiki).
+
+### Endpoints
+
+#### Base CRUD
+
+##### Create a Base
+
+`POST /api/bases`
+Description: Creates the base for a session. Called by Game Service when a lobby starts. The homeroom (FAF Cab) is annexed automatically. Idempotent via `event_id` — a second call for the same lobby returns the existing base.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-base-001",
+  "lobby_id": "lobby-uuid-789",
+  "map_id": "map-uuid-001",
+  "home_room_id": "faf-cab"
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "base_id": "base-uuid-001",
+  "lobby_id": "lobby-uuid-789",
+  "name": "FAF Cab",
+  "level": 1,
+  "rooms": [{ "room_id": "faf-cab", "reinforced": false, "barricade_level": 0 }],
+  "facilities": [],
+  "storage": { "capacity": 50, "used": 0 }
+}
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Lobby already has a base." }
+```
+
+##### Get a Base
+
+`GET /api/bases/{base_id}`
+Description: Full snapshot of the base — rooms, barricades, facilities, storage, decorations. Used by the base screen and by Game Service on reconnect.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{
+  "base_id": "base-uuid-001",
+  "lobby_id": "lobby-uuid-789",
+  "name": "FAF Cab",
+  "level": 2,
+  "rooms": [
+    { "room_id": "faf-cab", "reinforced": true, "barricade_level": 2 },
+    { "room_id": "lab-a1", "reinforced": false, "barricade_level": 1 }
+  ],
+  "facilities": [{ "facility_id": "fac-uuid-1", "type": "workbench", "level": 1 }],
+  "storage": { "capacity": 80, "used": 31 },
+  "decorations": [{ "decoration_id": "dec-uuid-1", "item_id": "poster-01", "slot": "wall_left" }]
+}
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "Base not found." }
+```
+
+##### Get Base by Lobby
+
+`GET /api/bases?lobby_id={lobby_id}`
+Description: Resolves the base of a session. Game Service uses it because it only knows the `lobby_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK): same shape as "Get a Base".
+
+##### Update a Base
+
+`PATCH /api/bases/{base_id}`
+Description: Renames the base or bumps its level after an upgrade. Structural changes (rooms, barricades, facilities) use the dedicated endpoints below.
+Headers: `Authorization: Bearer <jwt>`
+Payload:
+
+```json
+{ "name": "Fortress Cab" }
+```
+
+Success Response (200 OK):
+
+```json
+{ "base_id": "base-uuid-001", "name": "Fortress Cab", "level": 2 }
+```
+
+##### Delete a Base
+
+`DELETE /api/bases/{base_id}`
+Description: Removes the base when the session ends. Called by Game Service.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{ "base_id": "base-uuid-001", "deleted": true }
+```
+
+#### Rooms
+
+##### List Base Rooms
+
+`GET /api/bases/{base_id}/rooms`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[
+  { "room_id": "faf-cab", "reinforced": true, "barricade_level": 2, "annexed_at": "2026-09-10T14:00:00Z" },
+  { "room_id": "lab-a1", "reinforced": false, "barricade_level": 1, "annexed_at": "2026-09-10T14:20:00Z" }
+]
+```
+
+##### Annex a Room
+
+`POST /api/bases/{base_id}/rooms`
+Description: Expands the base into a cleared room. Verifies the room via World Service, charges the expansion cost via Resource Service, then adds the room — all atomically. Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-annex-001",
+  "room_id": "lab-a1",
+  "player_id": "player-uuid-123"
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "room_id": "lab-a1",
+  "reinforced": false,
+  "barricade_level": 0,
+  "cost_paid": [{ "item_id": "wood-01", "count": 10 }]
+}
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Room is not cleared or is already part of the base." }
+```
+
+Error Response (402 Payment Required):
+
+```json
+{ "error": "Insufficient resources.", "missing": [{ "item_id": "wood-01", "count": 4 }] }
+```
+
+##### Remove a Room from the Base
+
+`DELETE /api/bases/{base_id}/rooms/{room_id}`
+Description: Room lost to zombies or abandoned. The homeroom cannot be removed.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{ "room_id": "lab-a1", "removed": true }
+```
+
+#### Barricades
+
+##### Get Barricade
+
+`GET /api/bases/{base_id}/rooms/{room_id}/barricade`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "room_id": "lab-a1", "barricade_level": 1, "hp": 60, "max_hp": 100 }
+```
+
+##### Build / Reinforce a Barricade
+
+`POST /api/bases/{base_id}/rooms/{room_id}/barricade`
+Description: Builds a new barricade or raises its level. Result of the Game Service `barricade` timed action. Consumes wood + metal via Resource Service (or a `BARRICADE_KIT` item via Player Service when `kit_item_id` is given), then reports the new level to World Service. Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-barricade-001",
+  "player_id": "player-uuid-123",
+  "kit_item_id": null
+}
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "room_id": "lab-a1",
+  "barricade_level": 2,
+  "hp": 150,
+  "max_hp": 150,
+  "cost_paid": [{ "item_id": "wood-01", "count": 5 }, { "item_id": "metal-01", "count": 2 }]
+}
+```
+
+Error Response (402 Payment Required):
+
+```json
+{ "error": "Insufficient resources.", "missing": [{ "item_id": "metal-01", "count": 2 }] }
+```
+
+##### Repair / Damage a Barricade
+
+`PATCH /api/bases/{base_id}/rooms/{room_id}/barricade`
+Description: `repair` restores HP and costs wood (Game Service `repair` action); `damage` lowers HP after a zombie attack (Game Service, no cost). Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-attack-042",
+  "operation": "damage",
+  "amount": 30
+}
+```
+
+Success Response (200 OK):
+
+```json
+{ "room_id": "lab-a1", "barricade_level": 2, "hp": 120, "max_hp": 150, "destroyed": false }
+```
+
+##### Destroy a Barricade
+
+`DELETE /api/bases/{base_id}/rooms/{room_id}/barricade`
+Description: Barricade broken through. Level resets to 0 and World Service is notified.
+Headers: `Authorization: Bearer <service_jwt>`
+Success Response (200 OK):
+
+```json
+{ "room_id": "lab-a1", "barricade_level": 0, "destroyed": true }
+```
+
+#### Facilities
+
+##### List Facilities
+
+`GET /api/bases/{base_id}/facilities`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[
+  { "facility_id": "fac-uuid-1", "type": "workbench", "level": 1, "room_id": "faf-cab" },
+  { "facility_id": "fac-uuid-2", "type": "coffee_machine", "level": 2, "room_id": "faf-cab" }
+]
+```
+
+##### Build a Facility
+
+`POST /api/bases/{base_id}/facilities`
+Description: Builds a facility from the upgrade catalog. Checks requirements (base level, player level, unlocked exam), consumes the cost via Resource Service. Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-facility-001",
+  "player_id": "player-uuid-123",
+  "upgrade_id": "workbench",
+  "room_id": "faf-cab"
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "facility_id": "fac-uuid-1",
+  "type": "workbench",
+  "level": 1,
+  "room_id": "faf-cab",
+  "cost_paid": [{ "item_id": "wood-01", "count": 8 }, { "item_id": "metal-01", "count": 4 }]
+}
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Requirement not met: base level 2 required." }
+```
+
+##### Get a Facility
+
+`GET /api/bases/{base_id}/facilities/{facility_id}`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "facility_id": "fac-uuid-1", "type": "workbench", "level": 1, "room_id": "faf-cab", "next_upgrade_cost": [{ "item_id": "metal-01", "count": 6 }] }
+```
+
+##### Upgrade a Facility
+
+`PATCH /api/bases/{base_id}/facilities/{facility_id}`
+Description: Raises the facility one level. Consumes the next-level cost. Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{ "event_id": "evt-uuid-facility-upg-001", "player_id": "player-uuid-123" }
+```
+
+Success Response (200 OK):
+
+```json
+{ "facility_id": "fac-uuid-1", "type": "workbench", "level": 2, "cost_paid": [{ "item_id": "metal-01", "count": 6 }] }
+```
+
+##### Demolish a Facility
+
+`DELETE /api/bases/{base_id}/facilities/{facility_id}`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "facility_id": "fac-uuid-1", "deleted": true }
+```
+
+#### Storage
+
+##### Get Storage
+
+`GET /api/bases/{base_id}/storage`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "capacity": 80, "used": 31, "next_upgrade_cost": [{ "item_id": "wood-01", "count": 12 }] }
+```
+
+##### Unlock Storage Capacity
+
+`PATCH /api/bases/{base_id}/storage`
+Description: Raises capacity by one tier. Consumes the cost. Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{ "event_id": "evt-uuid-storage-001", "player_id": "player-uuid-123" }
+```
+
+Success Response (200 OK):
+
+```json
+{ "capacity": 120, "used": 31 }
+```
+
+#### Decorations
+
+##### List Decorations
+
+`GET /api/bases/{base_id}/decorations`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[{ "decoration_id": "dec-uuid-1", "item_id": "poster-01", "slot": "wall_left", "placed_by": "player-uuid-123" }]
+```
+
+##### Place a Decoration
+
+`POST /api/bases/{base_id}/decorations`
+Description: Places a cosmetic item from the player's inventory into a homeroom slot. The item is consumed via Player Service (`delta: -1`).
+Headers: `Authorization: Bearer <jwt>`
+Payload:
+
+```json
+{ "operation_id": "dec-op-uuid-1", "player_id": "player-uuid-123", "item_id": "poster-01", "slot": "wall_left" }
+```
+
+Success Response (201 Created):
+
+```json
+{ "decoration_id": "dec-uuid-1", "item_id": "poster-01", "slot": "wall_left" }
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Slot already occupied." }
+```
+
+##### Remove a Decoration
+
+`DELETE /api/bases/{base_id}/decorations/{decoration_id}`
+Description: Removes the decoration and returns the item to the player's inventory.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "decoration_id": "dec-uuid-1", "removed": true }
+```
+
+#### Kiki
+
+##### Feed Kiki
+
+`POST /api/bases/{base_id}/kiki/feed`
+Description: The player feeds Kiki food from the base stock. Food is consumed via Resource Service, then a random reward is rolled (booster item, XP, nothing). Items are granted through Player Service, XP through `PATCH /api/players/{player_id}/xp`. Idempotent via `event_id` — the same roll is returned on retry.
+Headers: `Authorization: Bearer <jwt>`
+Payload:
+
+```json
+{ "event_id": "evt-uuid-kiki-001", "player_id": "player-uuid-123", "food": [{ "item_id": "food-01", "count": 2 }] }
+```
+
+Success Response (200 OK):
+
+```json
+{
+  "reward": { "type": "item", "code": "ENERGY_BOOSTER", "quantity": 1 },
+  "kiki_mood": "happy",
+  "cooldown_until": "2026-09-10T15:00:00Z"
+}
+```
+
+Error Response (429 Too Many Requests):
+
+```json
+{ "error": "Kiki is full. Try again later." }
+```
+
+##### Get Kiki Status
+
+`GET /api/bases/{base_id}/kiki`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "kiki_mood": "hungry", "times_fed_today": 1, "cooldown_until": null }
+```
+
+#### Upgrade Catalog
+
+##### List Upgrades
+
+`GET /api/bases/upgrades`
+Description: All facilities, storage tiers and expansion costs, with their requirements. `?base_id=` annotates each entry with `available: true|false` for that base.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[
+  {
+    "upgrade_id": "workbench",
+    "category": "facility",
+    "name": "Workbench",
+    "cost": [{ "item_id": "wood-01", "count": 8 }, { "item_id": "metal-01", "count": 4 }],
+    "requires": { "base_level": 1 },
+    "effect": "unlocks crafting at the base"
+  },
+  {
+    "upgrade_id": "storage_t2",
+    "category": "storage",
+    "name": "Storage tier 2",
+    "cost": [{ "item_id": "wood-01", "count": 12 }],
+    "requires": { "base_level": 2 },
+    "effect": "+40 capacity"
+  }
+]
+```
+
+##### Create an Upgrade
+
+`POST /api/bases/upgrades`
+Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
+Payload:
+
+```json
+{ "upgrade_id": "watchtower", "category": "facility", "name": "Watchtower", "cost": [{ "item_id": "wood-01", "count": 20 }], "requires": { "base_level": 3 }, "effect": "reveals zombies one room away" }
+```
+
+Success Response (201 Created): the created upgrade.
+
+##### Update / Delete an Upgrade
+
+`PATCH /api/bases/upgrades/{upgrade_id}` · `DELETE /api/bases/upgrades/{upgrade_id}`
+Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
+Description: Rebalance costs / requirements, or retire an upgrade (refused while a base still has it built).
+
+## 8. Crafting Service
+
+Allows players to **combine resources into survival equipment**. Owns the recipe catalog, its unlock rules and every crafting job. Materials are validated and consumed through Resource Service, the crafted object is transferred to the player's inventory through Player Service; both happen inside one `Sequel.transaction { ... }` with a compensating refund if the credit fails. All mutating calls are idempotent via `event_id`.
+
+Example recipes: Wood + Metal → Barricade Kit · Paper + Metal → Improvised Weapon · Food + Chemicals → Energy Booster · Metal + Electronics → Zombie Detector · Paper + Wood → Exam Cheat Sheet.
+
+### Responsibilities
+
+- CRUD recipes: inputs, output item, crafting time, unlock requirements.
+- Resolve which recipes a player can currently craft (exam passed, level reached, wing unlocked, special resource discovered).
+- Execute crafting jobs atomically: validate materials → consume via Resource Service → credit item via Player Service.
+- Track job history so duplicated completion events cannot craft twice.
+- Receive unlock notifications from Exam Service (`ExamPassed`) and World Service (wing unlocked).
+
+### Dependencies
+
+| Calls | Endpoint | Why |
+| --- | --- | --- |
+| Resource Service | `GET /api/resources/entities/player/{player_id}` | validate the player has the materials |
+| Resource Service | `PATCH /api/resources/entities/player/{player_id}` (`remove`) | consume the materials |
+| Player Service | `POST /api/players/{player_id}/inventory` | credit the crafted object |
+| Player Service | `GET /api/players/{player_id}/xp` | level-gated recipes |
+| Exam Service | `GET /api/players/{player_id}/exams` | exam-gated recipes |
+| World Service | `GET /api/world/zones/{zone_id}` | wing-gated recipes |
+
+Called by: clients (crafting screen), Game Service (craft as a timed action), Exam Service / World Service (unlock notifications).
+
+### Endpoints
+
+#### Recipe CRUD
+
+##### Create a Recipe
+
+`POST /api/crafting/recipes`
+Description: Defines a recipe. `requires` is optional; an absent field means no gate.
+Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
+Payload:
+
+```json
+{
+  "recipe_id": "barricade_kit",
+  "name": "Barricade Kit",
+  "inputs": [{ "item_id": "wood-01", "count": 3 }, { "item_id": "metal-01", "count": 1 }],
+  "output": { "code": "BARRICADE_KIT", "type": "equipment", "quantity": 1 },
+  "craft_time_seconds": 60,
+  "requires": { "exam_id": null, "player_level": 1, "zone_id": null, "facility": "workbench" }
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "recipe_id": "barricade_kit",
+  "name": "Barricade Kit",
+  "inputs": [{ "item_id": "wood-01", "count": 3 }, { "item_id": "metal-01", "count": 1 }],
+  "output": { "code": "BARRICADE_KIT", "type": "equipment", "quantity": 1 },
+  "craft_time_seconds": 60,
+  "requires": { "player_level": 1, "facility": "workbench" }
+}
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Recipe id already exists." }
+```
+
+##### List Recipes
+
+`GET /api/crafting/recipes`
+Description: Full catalog. `?player_id=` annotates each recipe with `available` and `locked_by`.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[
+  { "recipe_id": "barricade_kit", "name": "Barricade Kit", "available": true, "locked_by": [] },
+  { "recipe_id": "exam_cheat_sheet", "name": "Exam Cheat Sheet", "available": false, "locked_by": ["exam:math-101"] }
+]
+```
+
+##### Get a Recipe
+
+`GET /api/crafting/recipes/{recipe_id}`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{
+  "recipe_id": "zombie_detector",
+  "name": "Zombie Detector",
+  "inputs": [{ "item_id": "metal-01", "count": 4 }, { "item_id": "electronics-01", "count": 2 }],
+  "output": { "code": "ZOMBIE_DETECTOR", "type": "equipment", "quantity": 1 },
+  "craft_time_seconds": 180,
+  "requires": { "zone_id": "zone-lab-wing", "player_level": 5 }
+}
+```
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "Recipe not found." }
+```
+
+##### Update a Recipe
+
+`PATCH /api/crafting/recipes/{recipe_id}`
+Description: Rebalances inputs, time or requirements without changing the id, so existing jobs keep a valid reference.
+Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
+Payload:
+
+```json
+{ "inputs": [{ "item_id": "wood-01", "count": 2 }, { "item_id": "metal-01", "count": 1 }], "craft_time_seconds": 45 }
+```
+
+Success Response (200 OK): the updated recipe.
+
+##### Delete a Recipe
+
+`DELETE /api/crafting/recipes/{recipe_id}`
+Description: Retires a recipe. Refused while jobs for it are in progress.
+Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
+Success Response (200 OK):
+
+```json
+{ "recipe_id": "exam_cheat_sheet", "deleted": true }
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Recipe has jobs in progress." }
+```
+
+#### Player Recipes & Unlocks
+
+##### List Available Recipes for a Player
+
+`GET /api/crafting/players/{player_id}/recipes`
+Description: Only recipes the player can craft right now, with the materials still missing.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[
+  { "recipe_id": "barricade_kit", "name": "Barricade Kit", "can_craft_now": true, "missing": [] },
+  { "recipe_id": "improvised_weapon", "name": "Improvised Weapon", "can_craft_now": false, "missing": [{ "item_id": "paper-01", "count": 2 }] }
+]
+```
+
+##### Get Player Unlocks
+
+`GET /api/crafting/players/{player_id}/unlocks`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+[
+  { "recipe_id": "exam_cheat_sheet", "unlocked_by": "exam:math-101", "unlocked_at": "2026-09-08T10:09:00Z" }
+]
+```
+
+##### Unlock Recipes **[internal]**
+
+`POST /api/crafting/players/{player_id}/unlocks`
+Description: Called by Exam Service on `ExamPassed` and by World Service when a wing is unlocked. Resolves every recipe whose `requires` is satisfied by the event and marks it unlocked. Idempotent via `event_id`.
+Headers: `Authorization: Bearer <service_jwt>`
+Payload:
+
+```json
+{ "event_id": "evt-uuid-555", "source": "exam-service", "exam_id": "exam-uuid-555", "course_id": "math-101" }
+```
+
+Success Response (200 OK):
+
+```json
+{ "unlocked": ["exam_cheat_sheet"] }
+```
+
+##### Revoke an Unlock
+
+`DELETE /api/crafting/players/{player_id}/unlocks/{recipe_id}`
+Description: Moderator correction.
+Headers: `Authorization: Bearer <jwt>` (`moderator` role required)
+Success Response (200 OK):
+
+```json
+{ "recipe_id": "exam_cheat_sheet", "revoked": true }
+```
+
+#### Crafting Jobs
+
+##### Craft an Item (Create Job)
+
+`POST /api/crafting/jobs`
+Description: Executes a recipe for a player. Steps, all inside one transaction: check unlock → check materials (Resource Service) → consume materials (`remove`) → credit the output (Player Service `POST /inventory`) → store the job. If the credit fails, materials are refunded (`add`) and the job is stored as `failed`. Idempotent via `event_id`: a retry returns the stored job without crafting again. When called by Game Service as a timed action, the job stays `in_progress` until `completes_at` and the credit happens on completion.
+Headers: `Authorization: Bearer <jwt>`
+Payload:
+
+```json
+{
+  "event_id": "evt-uuid-craft-001",
+  "player_id": "player-uuid-123",
+  "recipe_id": "barricade_kit",
+  "quantity": 1,
+  "base_id": "base-uuid-001"
+}
+```
+
+Success Response (201 Created):
+
+```json
+{
+  "job_id": "job-uuid-001",
+  "player_id": "player-uuid-123",
+  "recipe_id": "barricade_kit",
+  "quantity": 1,
+  "status": "completed",
+  "consumed": [{ "item_id": "wood-01", "count": 3 }, { "item_id": "metal-01", "count": 1 }],
+  "produced": { "item_id": "item-uuid-12", "code": "BARRICADE_KIT", "quantity": 1 },
+  "completes_at": "2026-09-10T14:01:00Z"
+}
+```
+
+Error Response (403 Forbidden):
+
+```json
+{ "error": "Recipe locked.", "locked_by": ["exam:math-101"] }
+```
+
+Error Response (402 Payment Required):
+
+```json
+{ "error": "Insufficient materials.", "missing": [{ "item_id": "metal-01", "count": 1 }] }
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Facility 'workbench' not built in base." }
+```
+
+##### Get a Job
+
+`GET /api/crafting/jobs/{job_id}`
+Description: Polling fallback and audit of a past craft.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK): same shape as "Craft an Item".
+
+Error Response (404 Not Found):
+
+```json
+{ "error": "Job not found." }
+```
+
+##### List Jobs
+
+`GET /api/crafting/jobs?player_id={player_id}&status=completed`
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "jobs": [{ "job_id": "job-uuid-001", "recipe_id": "barricade_kit", "status": "completed", "created_at": "2026-09-10T14:00:00Z" }] }
+```
+
+##### Cancel a Job
+
+`DELETE /api/crafting/jobs/{job_id}`
+Description: Cancels an `in_progress` timed craft and refunds the materials. Completed jobs cannot be cancelled.
+Headers: `Authorization: Bearer <jwt>`
+Success Response (200 OK):
+
+```json
+{ "job_id": "job-uuid-001", "status": "cancelled", "refunded": [{ "item_id": "wood-01", "count": 3 }, { "item_id": "metal-01", "count": 1 }] }
+```
+
+Error Response (409 Conflict):
+
+```json
+{ "error": "Job already completed." }
+```
+
+---
 
 ## Branch Structure
 
