@@ -3138,12 +3138,12 @@ Error Response (409 Conflict):
 
 ### Main Branches
 
-- `main` вЂ” Production-ready code, always deployable
-- `development` вЂ” Integration branch for features, staging environment
+- `main`  Production-ready code, always deployable
+- `development` Integration branch for features, staging environment
 
 ### Branch Protection Rules
 
-- Approvals Required: 1 reviewer minimum
+- Approvals Required: 1 reviewer minimum ( not him self )  
 - Dismiss Stale Reviews: Enabled (reviews are dismissed when new commits are pushed)
 - Branch must be up to date: Required before merging
 
@@ -3155,9 +3155,9 @@ We follow a standardized naming pattern for all branches:
 
 The three segments are:
 
-1. **type** вЂ” the kind of change (see table below).
-2. **service-name** вЂ” the microservice the branch targets (e.g. `player-service`, `game-service`, `exam-service`, `world-service`, `zombie-service`, `resource-service`, `base-service`, `crafting-service`).
-3. **FeatureName** вЂ” a short PascalCase or kebab-case description of the change. Use present tense for actions.
+1. **type** the kind of change (see table below).
+2. **service-name** the microservice the branch targets (e.g. `player-service`, `game-service`, `exam-service`, `world-service`, `zombie-service`, `resource-service`, `base-service`, `crafting-service`).
+3. **FeatureName**  a short PascalCase or kebab-case description of the change. Use present tense for actions.
 
 ### Branch Types
 
@@ -3188,7 +3188,6 @@ The three segments are:
 - Clean, linear commit history
 - Combines all commits from a feature branch into a single commit
 - Easier to track features and revert if necessary
-- Reduces noise in the main branch history
 
 ### Process
 
@@ -3198,81 +3197,13 @@ The three segments are:
 4. After approval, squash and merge
 5. Delete feature branch after merge
 
-## Pull Request Requirements
-
-Every Pull Request must include:
-
-### Required Information
-
-- Clear description of what changed and why
-- Issue reference (e.g. "Closes #42", "Fixes #18")
-- List of specific changes made
-- Testing instructions or results
-- Screenshots for UI changes
-- Breaking changes (if any)
-
-## Testing Standards
-
-### Current Requirements
-
-- All new functions should have corresponding tests
-- Run existing tests before submitting PR
-- Manual testing steps must be documented in PR
-- Critical features (trades, crafting, exam grading, resource transfers) require integration testing
-
 ### Future Automation
 
 - GitHub Actions will be configured for automatic testing
 - All PRs must pass automated tests before merging
 - Code coverage reports will be generated
 
-## Versioning Strategy
-
-We follow Semantic Versioning (SemVer): **MAJOR.MINOR.PATCH**
-
-### Version Types
-
-- **MAJOR** (e.g. 1.0.0 в†’ 2.0.0): Breaking changes that require player/admin action
-- **MINOR** (e.g. 1.0.0 в†’ 1.1.0): New features that are backward compatible (new zombie type, new recipe, new wing)
-- **PATCH** (e.g. 1.0.0 в†’ 1.0.1): Bug fixes and small improvements
-
-### Release Process
-
-1. Update version in each service's build descriptor
-2. Create release notes documenting changes
-3. Tag release in GitHub: `git tag v1.0.0`
-4. Create GitHub Release with changelog
-5. Deploy to production
-
-### Release Notes Format
-
-```markdown
-## [1.2.0] - 2026-09-05
-
-### Added
-
-- Player inventory persistence
-- Professor Zombie exam encounters
-- Crafting recipes for barricade kits
-
-### Changed
-
-- Improved trading flow UX
-- Updated game WebSocket event payloads
-
-### Fixed
-
-- Zombie spawn loop on night cycle
-- Memory leak in resource transactions
-
-### Security
-
-- Updated dependencies with security patches
-```
-
 ## Code Review Guidelines
-
-In addition to human reviewers, **every PR is automatically reviewed by a local AI code-review agent** that validates the structure of the change against the project's instructions and the service's documented contract. The agent also produces a **step-by-step graded verification report** attached to the PR.
 
 ### For Reviewers
 
@@ -3290,13 +3221,13 @@ In addition to human reviewers, **every PR is automatically reviewed by a local 
 ## Workflow Summary
 
 1. **Create Issue:** In each lab appear, meeting with team to document the feature/bug with clear requirements
-2. **Create Branch:** Use proper naming convention from `development`
+2. **Create Branch:** Use proper naming convention from `dev`
 3. **Develop:** Make commits with clear, descriptive messages
-4. **Test:** Verify functionality and run existing tests
+4. **Test:** Verify functionality
 5. **Create PR:** Follow template and provide complete information
 6. **Review:** Address feedback and get required approvals
-7. **Merge:** Squash and merge to `development`
-8. **Deploy:** Regular releases from `development` to `main`
+7. **Merge:** Squash and merge to `dev`
+8. **Deploy:** Regular releases from `dev` to `main`
 
 ## Tools & Resources
 
@@ -3313,7 +3244,3 @@ In addition to human reviewers, **every PR is automatically reviewed by a local 
 - **Reviewers:** Provide timely, constructive feedback
 - **Project Lead:** Manage releases and resolve conflicts
 - **QA:** Test major features (trading, crafting, exam grading) before production deployment
-
-## Testing Requirements
-
-- Unit test coverage minimum: **75 %**
