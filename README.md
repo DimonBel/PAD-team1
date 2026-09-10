@@ -3192,9 +3192,9 @@ The three segments are:
 
 ### Process
 
-1. Create feature branch from `development`
+1. Create feature branch from `dev`
 2. Make commits with clear, descriptive messages
-3. Open Pull Request to `development`
+3. Open Pull Request to `dev`
 4. After approval, squash and merge
 5. Delete feature branch after merge
 
@@ -3210,55 +3210,6 @@ Every Pull Request must include:
 - Testing instructions or results
 - Screenshots for UI changes
 - Breaking changes (if any)
-
-### PR Template
-
-We use the following template (located at `.github/PULL_REQUEST_TEMPLATE.md`):
-
-```markdown
-## What does this PR do?
-
-Brief description of the change and its purpose.
-
-## Related Issue
-
-Closes #XX
-
-## Changes Made
-
-- [ ] Added player inventory endpoint
-- [ ] Fixed zombie spawn loop
-- [ ] Updated game WebSocket events
-- [ ] Improved error handling
-
-## Type of Change
-
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] New feature (non-breaking change that adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
-
-## How to Test
-
-1. Pull this branch: `git checkout feature/branch-name`
-2. Install dependencies
-3. Run the application
-4. Trigger action "chop bench" and verify XP gain
-
-## Screenshots (if applicable)
-
-[Attach images for UI changes]
-
-## Checklist
-
-- [ ] My code follows the team's coding standards
-- [ ] I have performed a self-review of my code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-```
 
 ## Testing Standards
 
@@ -3323,13 +3274,8 @@ We follow Semantic Versioning (SemVer): **MAJOR.MINOR.PATCH**
 
 In addition to human reviewers, **every PR is automatically reviewed by a local AI code-review agent** that validates the structure of the change against the project's instructions and the service's documented contract. The agent also produces a **step-by-step graded verification report** attached to the PR.
 
-### AI Agent Review (Automated)
-
-The **Team Lead** runs the local AI code-review agent against each newly opened PR on their own machine, then pastes the agent's findings back into the PR thread as **short, actionable instructions** for the author.
-
 ### For Reviewers
 
-- Check the AI agent's step-by-step report first.
 - Verify functionality matches game-design requirements.
 - Test the changes locally when possible.
 - Provide constructive feedback tied to the grading rubric above.
