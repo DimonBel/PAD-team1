@@ -1,0 +1,12 @@
+# Each microservice is reviewed by the team member who owns it.
+# Deliberately no global owner: repository-level and README-only changes
+# stay reviewable by any teammate, per the Code Review Guidelines.
+
+/player-service/    @DimonBel
+/game-service/      @DimonBel
+/exam-service/      @danganhuh
+/world-service/     @danganhuh
+/zombie-service/    @tukaram40k
+/resource-service/  @tukaram40k
+/base-service/      @AlexandraB-C
+/crafting-service/  @AlexandraB-C
