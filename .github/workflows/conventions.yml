@@ -1,0 +1,94 @@
+name: Conventions
+
+# Enforces the conventions declared in the README:
+#   - Branch Naming Convention  -> type/service-name/FeatureName
+#   - Conventional Commits      -> PR title (the squash-merge commit subject)
+#   - Workflow Summary step 1   -> PR description references a related issue
+#   - Merging Strategy          -> feature branches target `dev`, not `main`
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  conventions:
+    name: Branch, title and description
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch name
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -u
+          # Long-lived branches are exempt.
+          case "$BRANCH" in
+            dev|main) echo "::notice::'$BRANCH' is a long-lived branch, skipping."; exit 0 ;;
+          esac
+          PATTERN='^(feat|fix|hotfix|refactor|docs|chore|test)/[a-z0-9.-]+/[A-Za-z0-9._-]+$'
+          if ! printf '%s' "$BRANCH" | grep -Eq "$PATTERN"; then
+            echo "::error::Branch '$BRANCH' does not match type/service-name/FeatureName."
+            echo "  type must be one of: feat fix hotfix refactor docs chore test"
+            echo "  service-name must be lowercase, e.g. player-service, game-service, shared"
+            echo "  example: feat/player-service/CreateLoginEndpoint"
+            exit 1
+          fi
+          echo "Branch name OK: $BRANCH"
+
+      - name: Check PR title is a Conventional Commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -u
+          PATTERN='^(feat|fix|hotfix|refactor|docs|chore|test|build|ci|perf|revert)(\([a-z0-9,./-]+\))?!?: .+'
+          if ! printf '%s' "$TITLE" | grep -Eq "$PATTERN"; then
+            echo "::error::PR title is not a Conventional Commit: '$TITLE'"
+            echo "  Squash-merge uses the PR title as the commit subject, so it must read"
+            echo "  like: docs(player-service): update the inventory endpoints"
+            echo "  Do not leave the title as the auto-generated branch name."
+            exit 1
+          fi
+          if printf '%s' "$TITLE" | grep -q '…'; then
+            echo "::error::PR title is truncated (ends in an ellipsis): '$TITLE'"
+            exit 1
+          fi
+          if [ "$TITLE" != "$(printf '%s' "$TITLE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')" ]; then
+            echo "::error::PR title has leading or trailing whitespace: '$TITLE'"
+            exit 1
+          fi
+          echo "PR title OK: $TITLE"
+
+      - name: Check PR description references an issue
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -u
+          if [ -z "${BODY:-}" ]; then
+            echo "::error::PR description is empty. Fill in the pull request template."
+            exit 1
+          fi
+          if ! printf '%s' "$BODY" | grep -Eq '#[0-9]+'; then
+            echo "::error::PR description does not reference a related issue (e.g. 'Closes #12')."
+            echo "  Workflow step 1 is 'Create Issue' - open one and link it here."
+            exit 1
+          fi
+          if printf '%s' "$BODY" | grep -q 'Closes #NNN'; then
+            echo "::error::Replace the 'Closes #NNN' placeholder with the real issue number."
+            exit 1
+          fi
+          echo "PR description OK."
+
+      - name: Check the PR targets the right base branch
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          set -u
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "dev" ]; then
+            echo "::error::Feature branches must target 'dev'. Only release PRs from 'dev' may target 'main'."
+            exit 1
+          fi
+          echo "Base branch OK: $HEAD -> $BASE"

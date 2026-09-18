@@ -1,0 +1,71 @@
+name: CI
+
+# The README states "All PRs must pass automated tests before merging".
+# This repository is the contract/documentation hub, so the checks validate
+# the documentation and the submodule wiring rather than application code.
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate docs and submodules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every submodule in .gitmodules has a gitlink and a URL
+        run: |
+          set -eu
+          status=0
+          names=$(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' \
+                  | sed -E 's/^submodule\.(.*)\.path .*/\1/')
+          for n in $names; do
+            path=$(git config -f .gitmodules --get "submodule.$n.path")
+            mode=$(git ls-files -s -- "$path" | awk '{print $1}')
+            if [ "$mode" != "160000" ]; then
+              echo "::error file=.gitmodules::'$path' is declared as a submodule but is not a gitlink (mode='${mode:-none}')."
+              status=1
+            fi
+            if ! git config -f .gitmodules --get "submodule.$n.url" >/dev/null; then
+              echo "::error file=.gitmodules::submodule '$n' has no url."
+              status=1
+            fi
+            [ "$status" -eq 0 ] && echo "ok: $path"
+          done
+          exit $status
+
+      - name: No mojibake or replacement characters in Markdown
+        run: |
+          set -eu
+          # U+FFFD replacement character, and the cp1251-read-as-utf8 arrow artefact.
+          # The convention audit is excluded: it quotes the bad strings on purpose.
+          if grep -rIn -e 'в†' -e '�' --include='*.md' \
+               --exclude='CONVENTION-VIOLATIONS.md' .; then
+            echo "::error::Mojibake found in Markdown. Re-save the file as UTF-8."
+            exit 1
+          fi
+          echo "No mojibake found."
+
+      - name: Referenced local assets exist
+        run: |
+          set -eu
+          grep -rhoE '\]\((\.{1,2}/)[^)]+\)' --include='*.md' . \
+            | sed -E 's/^\]\(//; s/\)$//' | sed 's/#.*//' | sort -u > targets.txt || true
+          status=0
+          while read -r target; do
+            [ -z "$target" ] && continue
+            if [ ! -e "$target" ]; then
+              echo "::error::Markdown references '$target', which does not exist."
+              status=1
+            else
+              echo "ok: $target"
+            fi
+          done < targets.txt
+          rm -f targets.txt
+          exit $status
