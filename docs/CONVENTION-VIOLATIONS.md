@@ -1,5 +1,26 @@
 # Git Convention Violations - `PAD-team1` and submodules
 
+> **Status: remediated for `PAD-team1`.** This report records the state of the repository
+> *before* the cleanup. It is kept as the audit trail. What has since been fixed:
+>
+> - `main` and `dev` were rebuilt as a linear, 26-commit Conventional-Commit history with every
+>   contributor's original authorship and dates preserved; all 7 merge commits and all 21
+>   duplicated commits are gone. The file tree is byte-identical to the pre-cleanup `main`.
+> - All 30 pull request titles were rewritten to Conventional Commits; all 16 empty PR
+>   descriptions were filled in.
+> - `.github/pull_request_template.md`, `.github/CODEOWNERS`, and the `Conventions` and `CI`
+>   workflows were added, so branch names, PR titles, PR descriptions and base branches are now
+>   enforced automatically.
+> - The README's `development`/`dev` contradiction and its two mojibake artefacts are fixed.
+> - The repository is now squash-merge-only with auto-delete of merged branches, and the `main`
+>   ruleset requires linear history.
+>
+> Still open, deliberately: the 22 pull requests with no related-issue reference. Back-filling
+> them would mean creating issues today and linking them to PRs merged in September, which
+> would be fabricated history rather than a fix. The rule is now enforced for all future PRs.
+> The branch-naming violations are likewise historical facts recorded in the PR list and cannot
+> be rewritten.
+
 A full audit of every branch, commit and pull request in `DimonBel/PAD-team1`,
 `DimonBel/player-service` and `DimonBel/game-service`, checked against the conventions
 declared in the repository README (Branch Structure, Branch Naming Convention, Branch Types,
