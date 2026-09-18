@@ -28,8 +28,6 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 The architectural diagram (provided separately by the team) illustrates how the eight microservices interact through the API Gateway and Service Registry. The Game Service sits at the center of the live game loop, while Player, Resource, Exam, World, Zombie, Base and Crafting Services each own a distinct domain. Inter-service communication is a mix of synchronous REST, asynchronous events and WebSocket fan-out.
 
-## в†’
-
 ***
 
 ## Authentication
@@ -39,7 +37,7 @@ All endpoints marked with **Headers: `Authorization: Bearer <jwt>`** require a v
 - `sub` the player UUID
 - `roles` e.g. `["player"]`, `["player", "moderator"]`
 
-Cross-service calls (e.g. Game Service в†’ Resource Service) use a dedicated **service-to-service JWT** signed with a shared internal secret.
+Cross-service calls (e.g. Game Service → Resource Service) use a dedicated **service-to-service JWT** signed with a shared internal secret.
 
 ---
 
@@ -3139,7 +3137,7 @@ Error Response (409 Conflict):
 ### Main Branches
 
 - `main`  Production-ready code, always deployable
-- `development` Integration branch for features, staging environment
+- `dev` Integration branch for features, staging environment
 
 ### Branch Protection Rules
 
