@@ -44,8 +44,10 @@ Compose refuses to start while a secret is missing, so you cannot boot with empt
 credentials by accident. Generate each one with `openssl rand -hex 32`. `.env` is
 git-ignored and must never be committed.
 
-Each service brings up its own Postgres on its own named volume, migrates itself and
-seeds its catalog on first boot. Nothing else to run.
+Each service brings up its own Postgres on its own named volume and migrates itself on
+first boot. The Ruby services also seed their catalog on boot; exam-service and
+world-service start empty, and their demo data is loaded separately (see
+[Database scripts](#database-scripts)). Nothing else to run.
 
 ### Published images
 
@@ -57,14 +59,35 @@ seeds its catalog on first boot. Nothing else to run.
 | game-service | not published yet | Dmitrii Belih |
 | zombie-service | not published yet | Ivan Rudenco |
 | resource-service | not published yet | Ivan Rudenco |
-| exam-service | not published yet | Alexandra Mihalevschi |
-| world-service | not published yet | Alexandra Mihalevschi |
+| exam-service | [`alexandramihalevschi/exam-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
+| world-service | [`alexandramihalevschi/world-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 
 The tag is the service version, so `cobili/base-service:0.1.0` is version 0.1.0.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
 
 Services that are not published yet are commented out in `docker-compose.yaml`. Uncomment
 a block once its image exists.
+
+#### What each image needs
+
+| Service | Required env (from `.env`) | Notes |
+| --- | --- | --- |
+| base-service, crafting-service | `*_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | `MOCK_MODE` optional, defaults to `true` |
+| exam-service, world-service | `*_DB_PASSWORD`, `*_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Phoenix releases: `SECRET_KEY_BASE` is required on top of the shared secrets. The image's own `CMD` doesn't migrate, so `docker-compose.yaml` runs `bin/migrate` before `bin/server` |
+
+#### Building exam-service / world-service from source
+
+Each lives in its own private repository, linked here as a git submodule. With access to it:
+
+```bash
+cd exam-service                       # or world-service
+docker build -t alexandramihalevschi/exam-service:<version> .
+docker push alexandramihalevschi/exam-service:<version>
+```
+
+Then bump the tag in `docker-compose.yaml` and in the table above. Each repository also
+has its own `docker-compose.yml` (app + Postgres), which builds from source for running
+that service alone. See its README.
 
 ### Ports
 
@@ -79,7 +102,7 @@ a block once its image exists.
 | base-service | 4007 |
 | crafting-service | 4008 |
 
-Every service answers `GET /health`:
+base-service and crafting-service answer `GET /health`:
 
 ```bash
 curl http://localhost:4007/health
@@ -89,11 +112,34 @@ curl http://localhost:4007/health
 {"status":"ok","service":"base-service","version":"0.1.0","database":"up","mock_mode":true}
 ```
 
+exam-service and world-service have no `/health` endpoint yet. Any API route confirms
+they're up: without a token it returns `401`, which means the app is serving requests.
+
+```bash
+curl -i http://localhost:4005/api/exams          # exam-service  -> 401
+curl -i http://localhost:4004/api/world/zones    # world-service -> 401
+```
+
 ### Running before the whole team is up
 
 base-service and crafting-service ship with `MOCK_MODE`. While it is `true` they use
 built-in stand-ins for the services they depend on, so they run and can be tested on
 their own. Set it to `false` once the real services are in the compose file.
+
+exam-service and world-service have no toggle. Every outbound call they make is a stub
+behind an `ExternalClients` module that logs the request it would send, in the
+contract's payload shape, instead of sending it:
+
+| From | To | Call |
+| --- | --- | --- |
+| exam-service | Player Service | `PATCH /api/players/{player_id}/xp` |
+| exam-service | World Service | `POST /api/world/unlocks` |
+| exam-service | Crafting Service | `POST /api/crafting/players/{player_id}/unlocks` |
+| world-service | Resource Service | `POST /api/resources/points` |
+| world-service | Crafting Service | `POST /api/crafting/players/{player_id}/unlocks` |
+
+Watch them with `docker compose logs -f exam-service world-service`. The lines are
+prefixed `[stub PlayerService]`, `[stub WorldService]` and so on.
 
 ### Testing
 
@@ -111,12 +157,36 @@ docker compose exec base-service bundle exec rake token:player
 docker compose exec base-service bundle exec rake token:service
 ```
 
+The exam-service and world-service collections sign their own tokens in a pre-request
+script. They only need the same secrets as your `.env`:
+
+```bash
+newman run postman/exam-service.postman_collection.json \
+  --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
+newman run postman/world-service.postman_collection.json \
+  --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
+```
+
+See `postman/README.md` for details and last-run results.
+
 ### Database scripts
 
-`deploy/db/` holds the schema and the seed data for the Ruby services as plain SQL, for
-anyone who wants to inspect the tables or load them into their own Postgres. The
-containers already migrate and seed themselves, so these are for reference rather than
-a required step.
+`deploy/db/` holds the schema and the seed data for base-service, crafting-service,
+exam-service and world-service as plain SQL, for anyone who wants to inspect the tables or
+load them into their own Postgres. The Ruby containers migrate and seed themselves, so
+their files are for reference.
+
+exam-service and world-service migrate on boot but don't seed. To load their demo data
+into the running stack, pipe the seed dump into each database container:
+
+```bash
+docker compose exec -T exam-db psql -U exam -d exam_service < deploy/db/exam-service-seed.sql
+docker compose exec -T world-db psql -U world -d world_service < deploy/db/world-service-seed.sql
+```
+
+Only the seed file is needed here, because the migrations already created the tables. On
+Windows PowerShell, `<` doesn't work, so use
+`Get-Content deploy\db\exam-service-seed.sql | docker compose exec -T exam-db psql -U exam -d exam_service`.
 
 ## Authentication
 
