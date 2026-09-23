@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hViRUfaSdaddoxGklqvQelyG0Jj2jOQXpEuNTgFxE9aOJYr0R5LQpa867Xqz3Ye
+\restrict o44s9S6zXazjQcDhS9Sf8CCoPSenHWpahaahW1G8wHB4kkdGMvsygEkNh6FRaB6
 
 -- Dumped from database version 16.14
 -- Dumped by pg_dump version 16.14
@@ -57,20 +57,8 @@ COPY public.exam_attempts (id, exam_id, course_id, player_id, status, expires_at
 
 
 --
--- Data for Name: schema_migrations; Type: TABLE DATA; Schema: public; Owner: -
---
-
-COPY public.schema_migrations (version, inserted_at) FROM stdin;
-20260920170325	2026-09-23 21:03:05
-20260920170326	2026-09-23 21:03:05
-20260920193027	2026-09-23 21:03:06
-20260920194838	2026-09-23 21:03:06
-\.
-
-
---
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hViRUfaSdaddoxGklqvQelyG0Jj2jOQXpEuNTgFxE9aOJYr0R5LQpa867Xqz3Ye
+\unrestrict o44s9S6zXazjQcDhS9Sf8CCoPSenHWpahaahW1G8wHB4kkdGMvsygEkNh6FRaB6
 

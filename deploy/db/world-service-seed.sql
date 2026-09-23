@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict WRdFikLgKfEcHzVPdVir5za4CrDLBdJD6KRjSRDpDxxgVTPDgeeUxdTEyN9guXp
+\restrict 5AlGEDIi0rEXls4eKyVHuddjvfaiXZWVDqhoI9QXo0MOW5dq8vRsliixonVtAIv
 
 -- Dumped from database version 16.14
 -- Dumped by pg_dump version 16.14
@@ -66,20 +66,6 @@ COPY public.resource_nodes (id, room_id, resource, remaining, inserted_at, updat
 
 
 --
--- Data for Name: schema_migrations; Type: TABLE DATA; Schema: public; Owner: -
---
-
-COPY public.schema_migrations (version, inserted_at) FROM stdin;
-20260920221926	2026-09-23 21:03:10
-20260920221927	2026-09-23 21:03:10
-20260920221928	2026-09-23 21:03:10
-20260921183618	2026-09-23 21:03:10
-20260921184610	2026-09-23 21:03:10
-20260921185035	2026-09-23 21:03:10
-\.
-
-
---
 -- Data for Name: zombie_spawns; Type: TABLE DATA; Schema: public; Owner: -
 --
 
@@ -98,5 +84,5 @@ COPY public.zombie_spawns (id, room_id, zombie_type, inserted_at, updated_at) FR
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WRdFikLgKfEcHzVPdVir5za4CrDLBdJD6KRjSRDpDxxgVTPDgeeUxdTEyN9guXp
+\unrestrict 5AlGEDIi0rEXls4eKyVHuddjvfaiXZWVDqhoI9QXo0MOW5dq8vRsliixonVtAIv
 
