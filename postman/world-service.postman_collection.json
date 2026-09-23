@@ -1,0 +1,817 @@
+{
+  "info": {
+    "_postman_id": "f1c4a9d0-9b1a-4b3e-8b7a-world-service-1",
+    "name": "World Service",
+    "description": "Covers map bootstrap, zones, rooms, coordinates, barricades, resource-nodes, zombie-spawns and the unlock flow for the World Service (see cpr/PAD-team1/world-service/README.md section 10 for the auth/role table this mirrors).\n\nThis collection mints its own JWTs via the collection-level pre-request script (HS256, signed with the same dev secrets as config/dev.exs), and every run generates fresh, non-colliding map/zone/room/course data, so importing it and clicking \"Run\" is enough — no manual token-pasting or id edits needed.\n\nIf your local dev secrets differ from the defaults (config/dev.exs's jwt_secret / service_jwt_secret), update the `jwt_secret` / `service_jwt_secret` collection variables before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Stable per-run identifiers: generated once per collection run, reused by every",
+          "// request within that run, so re-running the whole collection never collides with",
+          "// data from a previous run.",
+          "if (!pm.collectionVariables.get(\"run_id\")) {",
+          "    pm.collectionVariables.set(\"run_id\", Date.now().toString());",
+          "}",
+          "const runId = pm.collectionVariables.get(\"run_id\");",
+          "pm.collectionVariables.set(\"course_id\", runId + \"-postman-course\");",
+          "",
+          "// Minimal HS256 JWT signer using Postman's bundled CryptoJS — lets this collection",
+          "// mint its own valid player/moderator/service tokens instead of needing them pasted",
+          "// in by hand before every run.",
+          "function base64url(wordArray) {",
+          "    return CryptoJS.enc.Base64.stringify(wordArray)",
+          "        .replace(/\\+/g, \"-\")",
+          "        .replace(/\\//g, \"_\")",
+          "        .replace(/=+$/, \"\");",
+          "}",
+          "",
+          "function signJWT(payload, secret) {",
+          "    const header = { alg: \"HS256\", typ: \"JWT\" };",
+          "    const encodedHeader = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(header)));",
+          "    const encodedPayload = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)));",
+          "    const signingInput = encodedHeader + \".\" + encodedPayload;",
+          "    const signature = base64url(CryptoJS.HmacSHA256(signingInput, secret));",
+          "    return signingInput + \".\" + signature;",
+          "}",
+          "",
+          "const jwtSecret = pm.collectionVariables.get(\"jwt_secret\");",
+          "const serviceSecret = pm.collectionVariables.get(\"service_jwt_secret\");",
+          "",
+          "pm.collectionVariables.set(",
+          "    \"player_token\",",
+          "    signJWT({ sub: \"postman-player-\" + runId, roles: [\"player\"] }, jwtSecret)",
+          ");",
+          "pm.collectionVariables.set(",
+          "    \"moderator_token\",",
+          "    signJWT({ sub: \"postman-mod-\" + runId, roles: [\"player\", \"moderator\"] }, jwtSecret)",
+          ");",
+          "pm.collectionVariables.set(",
+          "    \"service_token\",",
+          "    signJWT({ roles: [\"service\"] }, serviceSecret)",
+          ");"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000", "type": "string" },
+    { "key": "jwt_secret", "value": "dev_only_jwt_secret_do_not_use_in_prod", "type": "string" },
+    { "key": "service_jwt_secret", "value": "dev_only_service_jwt_secret_do_not_use_in_prod", "type": "string" },
+    { "key": "run_id", "value": "", "type": "string" },
+    { "key": "course_id", "value": "", "type": "string" },
+    { "key": "zone_id", "value": "", "type": "string" },
+    { "key": "room_id", "value": "", "type": "string" },
+    { "key": "node_id", "value": "", "type": "string" },
+    { "key": "spawn_id", "value": "", "type": "string" },
+    { "key": "unlock_zone_id", "value": "", "type": "string" },
+    { "key": "unlock_rooms", "value": "", "type": "string" },
+    { "key": "player_token", "value": "", "type": "string" },
+    { "key": "moderator_token", "value": "", "type": "string" },
+    { "key": "service_token", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Map, Zones, Rooms",
+      "item": [
+        {
+          "name": "Create Map (bootstrap with seed zone)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "const seedZoneId = \"zone-postman-cab-\" + pm.collectionVariables.get(\"run_id\");",
+                  "pm.test(\"seed zone present\", () => pm.expect(json.zones).to.include(seedZoneId));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman Campus\",\"initial_zone\":{\"zone_id\":\"zone-postman-cab-{{run_id}}\",\"name\":\"Postman Cab\"}}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/world/map", "host": ["{{base_url}}"], "path": ["api", "world", "map"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Map",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/world/map", "host": ["{{base_url}}"], "path": ["api", "world", "map"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Map (version bumps)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"version is 2\", () => pm.expect(pm.response.json().version).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman Campus Renamed\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/world/map", "host": ["{{base_url}}"], "path": ["api", "world", "map"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Zone (standalone, auto-attaches to map)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"zone_id\", json.zone_id);",
+                  "pm.test(\"zone_id is slugified\", () => pm.expect(json.zone_id).to.match(/^zone-postman-zone-/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman Zone {{run_id}}\",\"unlocked\":false}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/world/zones", "host": ["{{base_url}}"], "path": ["api", "world", "zones"] }
+          },
+          "response": []
+        },
+        {
+          "name": "List Zones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"includes the created zone\", () => {",
+                  "    const ids = pm.response.json().map((z) => z.zone_id);",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get(\"zone_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/world/zones", "host": ["{{base_url}}"], "path": ["api", "world", "zones"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Zone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/world/zones/{{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "zones", "{{zone_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Zone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"name updated\", () => pm.expect(pm.response.json().name).to.eql(\"Renamed Zone\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\"name\":\"Renamed Zone\"}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{base_url}}/api/world/zones/{{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "zones", "{{zone_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Room (resource derived from type)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"room_id\", json.room_id);",
+                  "pm.test(\"resource derived from type\", () => pm.expect(json.resource).to.eql(\"metal_scraps\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"zone_id\":\"{{zone_id}}\",\"type\":\"laboratory\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/world/rooms", "host": ["{{base_url}}"], "path": ["api", "world", "rooms"] }
+          },
+          "response": []
+        },
+        {
+          "name": "List Rooms (filtered by zone_id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"contains the created room\", () => {",
+                  "    const ids = pm.response.json().map((r) => r.room_id);",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get(\"room_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms?zone_id={{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms"],
+              "query": [{ "key": "zone_id", "value": "{{zone_id}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room (resource_nodes shape)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"has resource_nodes array\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"resource_nodes\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Room (type/resource directly)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"type/resource updated\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.type).to.eql(\"library\");",
+                  "    pm.expect(json.resource).to.eql(\"paper\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"type\":\"library\",\"resource\":\"paper\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Coordinates & Barricades",
+      "item": [
+        {
+          "name": "Set Coordinates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"x/y set\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.x).to.eql(4);",
+                  "    pm.expect(json.y).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\"x\":4,\"y\":2}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/coordinates",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "coordinates"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Coordinates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/coordinates",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "coordinates"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Coordinates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"x updated\", () => pm.expect(pm.response.json().x).to.eql(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\"x\":5,\"y\":2}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/coordinates",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "coordinates"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Barricade Level (service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"barricade_level is 2\", () => pm.expect(pm.response.json().barricade_level).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"event_id\":\"evt-postman-{{run_id}}\",\"barricade_level\":2}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/barricades",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "barricades"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Replay same event_id with a different level (must not double-apply)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"still barricade_level 2, replay ignored\", () => {",
+                  "    pm.expect(pm.response.json().barricade_level).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"event_id\":\"evt-postman-{{run_id}}\",\"barricade_level\":5}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/barricades",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "barricades"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Resource Nodes & Zombie Spawns",
+      "item": [
+        {
+          "name": "Create Resource Node (moderator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"node_id\", json.node_id);",
+                  "pm.test(\"remaining seeded from initial_yield\", () => pm.expect(json.remaining).to.eql(50));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"resource\":\"metal_scraps\",\"initial_yield\":50}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/resource-nodes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "resource-nodes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Resource Nodes (service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"contains the created node\", () => {",
+                  "    const ids = pm.response.json().map((n) => n.node_id);",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get(\"node_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/resource-nodes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "resource-nodes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Resource Node (moderator restock)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"remaining updated\", () => pm.expect(pm.response.json().remaining).to.eql(35));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\"remaining\":35}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms/{{room_id}}/resource-nodes/{{node_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms", "{{room_id}}", "resource-nodes", "{{node_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Zombie Spawn (moderator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"spawn_id\", pm.response.json().spawn_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"room_id\":\"{{room_id}}\",\"zombie_type\":\"professor_zombie\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/world/zombie-spawns", "host": ["{{base_url}}"], "path": ["api", "world", "zombie-spawns"] }
+          },
+          "response": []
+        },
+        {
+          "name": "List Zombie Spawns filtered by zone_id (service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"contains the created spawn\", () => {",
+                  "    const ids = pm.response.json().map((s) => s.spawn_id);",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get(\"spawn_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/world/zombie-spawns?zone_id={{zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "zombie-spawns"],
+              "query": [{ "key": "zone_id", "value": "{{zone_id}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Zombie Spawn (moderator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"zombie_type updated\", () => {",
+                  "    pm.expect(pm.response.json().zombie_type).to.eql(\"tourist_zombie\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"zombie_type\":\"tourist_zombie\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/world/zombie-spawns/{{spawn_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "zombie-spawns", "{{spawn_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Unlock Flow",
+      "item": [
+        {
+          "name": "Unlock New Section (service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"unlocked with 2 generated rooms\", () => {",
+                  "    pm.expect(json.unlocked).to.eql(true);",
+                  "    pm.expect(json.rooms_added).to.have.lengthOf(2);",
+                  "});",
+                  "pm.collectionVariables.set(\"unlock_zone_id\", json.zone_id);",
+                  "pm.collectionVariables.set(\"unlock_rooms\", JSON.stringify(json.rooms_added));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"event_id\":\"evt-unlock-{{run_id}}\",\"player_id\":\"postman-player\",\"course_id\":\"{{course_id}}\",\"achievement_id\":\"survived_the_pumpkin\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/world/unlocks", "host": ["{{base_url}}"], "path": ["api", "world", "unlocks"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Replay same event_id (must not duplicate rooms)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"same zone and rooms as the first call\", () => {",
+                  "    pm.expect(json.zone_id).to.eql(pm.collectionVariables.get(\"unlock_zone_id\"));",
+                  "    pm.expect(JSON.stringify(json.rooms_added)).to.eql(pm.collectionVariables.get(\"unlock_rooms\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"event_id\":\"evt-unlock-{{run_id}}\",\"player_id\":\"postman-player\",\"course_id\":\"totally-different-course\",\"achievement_id\":\"other\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/world/unlocks", "host": ["{{base_url}}"], "path": ["api", "world", "unlocks"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm room count did not grow (still 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"exactly 2 rooms in the unlocked zone\", () => {",
+                  "    pm.expect(pm.response.json()).to.have.lengthOf(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/world/rooms?zone_id={{unlock_zone_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "world", "rooms"],
+              "query": [{ "key": "zone_id", "value": "{{unlock_zone_id}}" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

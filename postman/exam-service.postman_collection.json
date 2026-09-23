@@ -1,0 +1,826 @@
+{
+  "info": {
+    "_postman_id": "e5a2f2b0-9b1a-4b3e-8b7a-exam-service-1",
+    "name": "Exam Service",
+    "description": "Covers courses, exams, the full exam-attempt lifecycle (start -> answer -> finalize/grade -> cancel) and academic-record wiring for the Exam Service (see cpr/PAD-team1/exam-service/README.md section 8 for the auth/role table this mirrors).\n\nThis collection mints its own JWTs via the collection-level pre-request script (HS256, signed with the same dev secrets as config/dev.exs), and every run generates fresh, non-colliding course/exam/player ids, so importing it and clicking \"Run\" is enough — no manual token-pasting or id edits needed.\n\nFolders 1-3 are safe to run automatically end-to-end. Folder 4 (the 410 expired-attempt case) is deliberately excluded from an automatic run — the attempt window is a real 10 minutes server-side, so it needs a manual wait; see its own description. The ExUnit suite already covers that case deterministically.\n\nIf your local dev secrets differ from the defaults (config/dev.exs's jwt_secret / service_jwt_secret), update the `jwt_secret` / `service_jwt_secret` collection variables before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Stable per-run identifiers: generated once per collection run, reused by every",
+          "// request within that run, so re-running the whole collection never collides with",
+          "// data from a previous run.",
+          "if (!pm.collectionVariables.get(\"run_id\")) {",
+          "    pm.collectionVariables.set(\"run_id\", Date.now().toString());",
+          "}",
+          "const runId = pm.collectionVariables.get(\"run_id\");",
+          "pm.collectionVariables.set(\"course_id\", \"postman-course-\" + runId);",
+          "pm.collectionVariables.set(\"player_id\", \"postman-player-\" + runId);",
+          "",
+          "// Minimal HS256 JWT signer using Postman's bundled CryptoJS — lets this collection",
+          "// mint its own valid player/moderator/service tokens instead of needing them pasted",
+          "// in by hand before every run.",
+          "function base64url(wordArray) {",
+          "    return CryptoJS.enc.Base64.stringify(wordArray)",
+          "        .replace(/\\+/g, \"-\")",
+          "        .replace(/\\//g, \"_\")",
+          "        .replace(/=+$/, \"\");",
+          "}",
+          "",
+          "function signJWT(payload, secret) {",
+          "    const header = { alg: \"HS256\", typ: \"JWT\" };",
+          "    const encodedHeader = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(header)));",
+          "    const encodedPayload = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)));",
+          "    const signingInput = encodedHeader + \".\" + encodedPayload;",
+          "    const signature = base64url(CryptoJS.HmacSHA256(signingInput, secret));",
+          "    return signingInput + \".\" + signature;",
+          "}",
+          "",
+          "const jwtSecret = pm.collectionVariables.get(\"jwt_secret\");",
+          "const serviceSecret = pm.collectionVariables.get(\"service_jwt_secret\");",
+          "",
+          "pm.collectionVariables.set(",
+          "    \"player_token\",",
+          "    signJWT({ sub: pm.collectionVariables.get(\"player_id\"), roles: [\"player\"] }, jwtSecret)",
+          ");",
+          "pm.collectionVariables.set(",
+          "    \"moderator_token\",",
+          "    signJWT({ sub: \"postman-mod-\" + runId, roles: [\"player\", \"moderator\"] }, jwtSecret)",
+          ");",
+          "pm.collectionVariables.set(",
+          "    \"service_token\",",
+          "    signJWT({ roles: [\"service\"] }, serviceSecret)",
+          ");"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000", "type": "string" },
+    { "key": "jwt_secret", "value": "dev_only_jwt_secret_do_not_use_in_prod", "type": "string" },
+    { "key": "service_jwt_secret", "value": "dev_only_service_jwt_secret_do_not_use_in_prod", "type": "string" },
+    { "key": "run_id", "value": "", "type": "string" },
+    { "key": "course_id", "value": "", "type": "string" },
+    { "key": "player_id", "value": "", "type": "string" },
+    { "key": "exam_id", "value": "", "type": "string" },
+    { "key": "attempt_id", "value": "", "type": "string" },
+    { "key": "dup_attempt_id", "value": "", "type": "string" },
+    { "key": "cancel_attempt_id", "value": "", "type": "string" },
+    { "key": "first_score", "value": "", "type": "string" },
+    { "key": "player_token", "value": "", "type": "string" },
+    { "key": "moderator_token", "value": "", "type": "string" },
+    { "key": "service_token", "value": "", "type": "string" },
+    { "key": "expired_attempt_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Setup — Courses & Exams",
+      "item": [
+        {
+          "name": "Create Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"course_id matches\", () => {",
+                  "    pm.expect(pm.response.json().course_id).to.eql(pm.collectionVariables.get(\"course_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"course_id\":\"{{course_id}}\",\"name\":\"Postman Calculus I\",\"required_exam_ids\":[]}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/courses", "host": ["{{base_url}}"], "path": ["api", "courses"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Exam",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"exam_id present\", () => pm.expect(json.exam_id).to.be.a(\"string\"));",
+                  "pm.collectionVariables.set(\"exam_id\", json.exam_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"course_id\":\"{{course_id}}\",\"title\":\"Postman Calculus Final\",\"difficulty\":\"hard\",\"questions\":[{\"question_id\":\"q-1\",\"text\":\"2 + 2 = ?\",\"options\":[\"3\",\"4\",\"5\"],\"correct_answer\":\"4\"}]}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/exams", "host": ["{{base_url}}"], "path": ["api", "exams"] }
+          },
+          "response": []
+        },
+        {
+          "name": "List Exams (filtered by course)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"contains the created exam\", () => {",
+                  "    const ids = pm.response.json().map((e) => e.exam_id);",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get(\"exam_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exams?course_id={{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exams"],
+              "query": [{ "key": "course_id", "value": "{{course_id}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Exam",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/exams/{{exam_id}}", "host": ["{{base_url}}"], "path": ["api", "exams", "{{exam_id}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Exam",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"difficulty updated\", () => pm.expect(pm.response.json().difficulty).to.eql(\"medium\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\"difficulty\":\"medium\"}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/exams/{{exam_id}}", "host": ["{{base_url}}"], "path": ["api", "exams", "{{exam_id}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "List Exam Questions (moderator, includes answer key)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"includes correct_answer\", () => {",
+                  "    pm.expect(pm.response.json()[0].correct_answer).to.eql(\"4\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exams/{{exam_id}}/questions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exams", "{{exam_id}}", "questions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Attach Exam to Course (Update Course)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"required_exam_ids includes the exam\", () => {",
+                  "    pm.expect(pm.response.json().required_exam_ids).to.include(pm.collectionVariables.get(\"exam_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{moderator_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"required_exam_ids\":[\"{{exam_id}}\"]}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/courses/{{course_id}}", "host": ["{{base_url}}"], "path": ["api", "courses", "{{course_id}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/courses/{{course_id}}", "host": ["{{base_url}}"], "path": ["api", "courses", "{{course_id}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "List Courses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": { "raw": "{{base_url}}/api/courses", "host": ["{{base_url}}"], "path": ["api", "courses"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Exam Attempt — Happy Path",
+      "item": [
+        {
+          "name": "Start Attempt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"attempt_id\", json.attempt_id);",
+                  "pm.test(\"questions have no correct_answer\", () => {",
+                  "    pm.expect(json.questions[0]).to.not.have.property(\"correct_answer\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"player_id\":\"{{player_id}}\",\"course_id\":\"{{course_id}}\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/exam-attempts", "host": ["{{base_url}}"], "path": ["api", "exam-attempts"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"in_progress\", () => pm.expect(pm.response.json().status).to.eql(\"in_progress\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{attempt_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Answer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question_id\":\"q-1\",\"selected\":\"4\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{attempt_id}}/answers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{attempt_id}}", "answers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Answers (pre-grade, unannotated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"no correct field yet\", () => {",
+                  "    pm.expect(pm.response.json()[0]).to.not.have.property(\"correct\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{attempt_id}}/answers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{attempt_id}}", "answers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Finalize (Grade)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"score 100, passed true\", () => {",
+                  "    pm.expect(json.score).to.eql(100);",
+                  "    pm.expect(json.passed).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.set(\"first_score\", json.score);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{attempt_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Finalize Again (Idempotent)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"unchanged from first finalize\", () => {",
+                  "    const expected = Number(pm.collectionVariables.get(\"first_score\"));",
+                  "    pm.expect(pm.response.json().score).to.eql(expected);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{attempt_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Answers (post-grade, annotated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"correct annotation present\", () => {",
+                  "    pm.expect(pm.response.json()[0].correct).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{attempt_id}}/answers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{attempt_id}}", "answers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Academic Record",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"one grade recorded, for this run's course\", () => {",
+                  "    pm.expect(json.grades).to.have.lengthOf(1);",
+                  "    pm.expect(json.grades[0].course_id).to.eql(pm.collectionVariables.get(\"course_id\"));",
+                  "    pm.expect(json.grades[0].status).to.eql(\"passed\");",
+                  "});",
+                  "// courses_completed is scoped to this player, so it's always exactly 1 here.",
+                  "// courses_required is the GLOBAL catalog count (every course ever created with",
+                  "// required exams) — there's no DELETE /api/courses, so it only grows across repeated",
+                  "// runs. Assert >= 1 rather than an exact match so the collection stays repeatable.",
+                  "pm.test(\"diploma progress reflects the completed course\", () => {",
+                  "    pm.expect(json.diploma_progress.courses_completed).to.eql(1);",
+                  "    pm.expect(json.diploma_progress.courses_required).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/players/{{player_id}}/academic-record",
+              "host": ["{{base_url}}"],
+              "path": ["api", "players", "{{player_id}}", "academic-record"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Player Exam History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"shows the passed exam\", () => {",
+                  "    pm.expect(json).to.have.lengthOf(1);",
+                  "    pm.expect(json[0].status).to.eql(\"passed\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/players/{{player_id}}/exams",
+              "host": ["{{base_url}}"],
+              "path": ["api", "players", "{{player_id}}", "exams"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Player Achievements",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"always empty for now\", () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/players/{{player_id}}/achievements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "players", "{{player_id}}", "achievements"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Exam Attempt — Error Scenarios (409)",
+      "item": [
+        {
+          "name": "Start Duplicate Setup Attempt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"dup_attempt_id\", pm.response.json().attempt_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"player_id\":\"{{player_id}}-dup\",\"course_id\":\"{{course_id}}\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/exam-attempts", "host": ["{{base_url}}"], "path": ["api", "exam-attempts"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Start Duplicate Attempt (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"player_id\":\"{{player_id}}-dup\",\"course_id\":\"{{course_id}}\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/exam-attempts", "host": ["{{base_url}}"], "path": ["api", "exam-attempts"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Cleanup: Cancel Duplicate Setup Attempt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"200 OK\", () => pm.response.to.have.status(200));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{dup_attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{dup_attempt_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start Attempt For Cancel Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"cancel_attempt_id\", pm.response.json().attempt_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"player_id\":\"{{player_id}}-cancel-test\",\"course_id\":\"{{course_id}}\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/exam-attempts", "host": ["{{base_url}}"], "path": ["api", "exam-attempts"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Attempt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status cancelled\", () => pm.expect(pm.response.json().status).to.eql(\"cancelled\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{cancel_attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{cancel_attempt_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Answer On Cancelled Attempt (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question_id\":\"q-1\",\"selected\":\"4\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{cancel_attempt_id}}/answers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{cancel_attempt_id}}", "answers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Already-Graded Attempt (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{service_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{attempt_id}}"]
+            },
+            "description": "Reuses the attempt_id graded in folder 2 — cancelling a graded attempt must always be 409."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Reference — Manual Only (410 expired attempt)",
+      "description": "Not part of an automated run. The attempt window is a real 10 minutes server-side (see ExamService.ExamAttempts @attempt_duration_seconds), so triggering a genuine 410 needs a real wait — there's no API to shorten it. The ExUnit suite covers this exact case deterministically (by inserting a pre-expired attempt directly into the DB), so this request exists purely for manual/exploratory testing.\n\nTo use it: run folder 1 once to get a course_id, start a fresh attempt via folder 2's \"Start Attempt\" request, copy its attempt_id into the `expired_attempt_id` collection variable, wait 10 minutes without finalizing it, then run this request.",
+      "item": [
+        {
+          "name": "Finalize an expired, ungraded attempt (expect 410)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"410 Gone\", () => pm.response.to.have.status(410));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{player_token}}", "type": "string" }] },
+            "url": {
+              "raw": "{{base_url}}/api/exam-attempts/{{expired_attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "exam-attempts", "{{expired_attempt_id}}"]
+            },
+            "description": "Set `expired_attempt_id` manually before running — see the folder description."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
