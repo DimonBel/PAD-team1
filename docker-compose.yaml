@@ -73,6 +73,66 @@ services:
     ports:
       - "4008:4008"
 
+  # ----------------------------------------------------------------- world-service
+  world-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${WORLD_DB_USER:-world}
+      POSTGRES_PASSWORD: ${WORLD_DB_PASSWORD:?set WORLD_DB_PASSWORD in .env}
+      POSTGRES_DB: ${WORLD_DB_NAME:-world_service}
+    volumes:
+      - world-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WORLD_DB_USER:-world} -d ${WORLD_DB_NAME:-world_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  world-service:
+    image: alexandramihalevschi/world-service:0.1.0
+    command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
+    depends_on:
+      world-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${WORLD_DB_USER:-world}:${WORLD_DB_PASSWORD}@world-db:5432/${WORLD_DB_NAME:-world_service}
+      SECRET_KEY_BASE: ${WORLD_SECRET_KEY_BASE:?set WORLD_SECRET_KEY_BASE in .env}
+      PORT: 4004
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+    ports:
+      - "4004:4004"
+
+  # ------------------------------------------------------------------ exam-service
+  exam-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${EXAM_DB_USER:-exam}
+      POSTGRES_PASSWORD: ${EXAM_DB_PASSWORD:?set EXAM_DB_PASSWORD in .env}
+      POSTGRES_DB: ${EXAM_DB_NAME:-exam_service}
+    volumes:
+      - exam-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EXAM_DB_USER:-exam} -d ${EXAM_DB_NAME:-exam_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  exam-service:
+    image: alexandramihalevschi/exam-service:0.1.0
+    command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
+    depends_on:
+      exam-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${EXAM_DB_USER:-exam}:${EXAM_DB_PASSWORD}@exam-db:5432/${EXAM_DB_NAME:-exam_service}
+      SECRET_KEY_BASE: ${EXAM_SECRET_KEY_BASE:?set EXAM_SECRET_KEY_BASE in .env}
+      PORT: 4005
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+    ports:
+      - "4005:4005"
+
   # ------------------------------------------------------------------- the rest
   # Uncomment a block once that service has a public image on Docker Hub.
   # Keep the shape above: own database, own volume, required secrets, distinct port.
@@ -80,13 +140,17 @@ services:
   # player-service:    port 4001   owner @DimonBel
   # game-service:      port 4002   owner @DimonBel
   # zombie-service:    port 4003   owner @tukaram40k
-  # world-service:     port 4004   owner @danganhuh
-  # exam-service:      port 4005   owner @danganhuh
   # resource-service:  port 4006   owner @tukaram40k
   #
-  # Until then the two services below run with MOCK_MODE=true and stand in for
-  # the calls they would make.
+  # base-service and crafting-service ship with MOCK_MODE and stand in for exam-service /
+  # world-service / player-service / resource-service until those are also live here — see
+  # "Running before the whole team is up" in the root README. exam-service and world-service
+  # don't have a MOCK_MODE toggle of their own: their outbound calls (Player/World/Crafting
+  # Service from exam-service; Resource/Crafting Service from world-service) are unconditional
+  # stubs that only log, regardless of what else is running in this compose file.
 
 volumes:
   base-pgdata:
   crafting-pgdata:
+  world-pgdata:
+  exam-pgdata:
