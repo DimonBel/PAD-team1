@@ -1,0 +1,92 @@
+# Runs the team's services from the images published on Docker Hub.
+# Nothing here builds from a Dockerfile on purpose: the images are the artefact.
+#
+#   cp .env.example .env     # then fill in every secret
+#   docker compose up -d
+#
+# Each service keeps its own Postgres and its own named volume, so no service can
+# read another one's tables. Ports are distinct so everything runs at once.
+
+services:
+  # ---------------------------------------------------------------- base-service
+  base-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${BASE_DB_USER:-base}
+      POSTGRES_PASSWORD: ${BASE_DB_PASSWORD:?set BASE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${BASE_DB_NAME:-base_service}
+    volumes:
+      - base-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BASE_DB_USER:-base} -d ${BASE_DB_NAME:-base_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  base-service:
+    image: cobili/base-service:0.1.0
+    depends_on:
+      base-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${BASE_DB_USER:-base}:${BASE_DB_PASSWORD}@base-db:5432/${BASE_DB_NAME:-base_service}
+      PORT: 4007
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      MOCK_MODE: ${MOCK_MODE:-true}
+      RESOURCE_SERVICE_URL: http://resource-service:4006
+      WORLD_SERVICE_URL: http://world-service:4004
+      PLAYER_SERVICE_URL: http://player-service:4001
+    ports:
+      - "4007:4007"
+
+  # ------------------------------------------------------------ crafting-service
+  crafting-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${CRAFTING_DB_USER:-crafting}
+      POSTGRES_PASSWORD: ${CRAFTING_DB_PASSWORD:?set CRAFTING_DB_PASSWORD in .env}
+      POSTGRES_DB: ${CRAFTING_DB_NAME:-crafting_service}
+    volumes:
+      - crafting-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CRAFTING_DB_USER:-crafting} -d ${CRAFTING_DB_NAME:-crafting_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  crafting-service:
+    image: cobili/crafting-service:0.1.0
+    depends_on:
+      crafting-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${CRAFTING_DB_USER:-crafting}:${CRAFTING_DB_PASSWORD}@crafting-db:5432/${CRAFTING_DB_NAME:-crafting_service}
+      PORT: 4008
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      MOCK_MODE: ${MOCK_MODE:-true}
+      RESOURCE_SERVICE_URL: http://resource-service:4006
+      PLAYER_SERVICE_URL: http://player-service:4001
+      EXAM_SERVICE_URL: http://exam-service:4005
+      WORLD_SERVICE_URL: http://world-service:4004
+    ports:
+      - "4008:4008"
+
+  # ------------------------------------------------------------------- the rest
+  # Uncomment a block once that service has a public image on Docker Hub.
+  # Keep the shape above: own database, own volume, required secrets, distinct port.
+  #
+  # player-service:    port 4001   owner @DimonBel
+  # game-service:      port 4002   owner @DimonBel
+  # zombie-service:    port 4003   owner @tukaram40k
+  # world-service:     port 4004   owner @danganhuh
+  # exam-service:      port 4005   owner @danganhuh
+  # resource-service:  port 4006   owner @tukaram40k
+  #
+  # Until then the two services below run with MOCK_MODE=true and stand in for
+  # the calls they would make.
+
+volumes:
+  base-pgdata:
+  crafting-pgdata:

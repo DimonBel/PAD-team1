@@ -30,6 +30,94 @@ The architectural diagram (provided separately by the team) illustrates how the 
 
 ***
 
+## Running the platform
+
+Everything runs from images published on Docker Hub. You do not need Ruby, Elixir or a
+local Postgres, only Docker and Docker Compose.
+
+```bash
+cp .env.example .env     # then fill in every secret
+docker compose up -d
+```
+
+Compose refuses to start while a secret is missing, so you cannot boot with empty
+credentials by accident. Generate each one with `openssl rand -hex 32`. `.env` is
+git-ignored and must never be committed.
+
+Each service brings up its own Postgres on its own named volume, migrates itself and
+seeds its catalog on first boot. Nothing else to run.
+
+### Published images
+
+| Service | Image | Owner |
+| --- | --- | --- |
+| base-service | [`cobili/base-service:0.1.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
+| crafting-service | [`cobili/crafting-service:0.1.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
+| player-service | not published yet | Dmitrii Belih |
+| game-service | not published yet | Dmitrii Belih |
+| zombie-service | not published yet | Ivan Rudenco |
+| resource-service | not published yet | Ivan Rudenco |
+| exam-service | not published yet | Alexandra Mihalevschi |
+| world-service | not published yet | Alexandra Mihalevschi |
+
+The tag is the service version, so `cobili/base-service:0.1.0` is version 0.1.0.
+`docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
+
+Services that are not published yet are commented out in `docker-compose.yaml`. Uncomment
+a block once its image exists.
+
+### Ports
+
+| Service | Port |
+| --- | --- |
+| player-service | 4001 |
+| game-service | 4002 |
+| zombie-service | 4003 |
+| world-service | 4004 |
+| exam-service | 4005 |
+| resource-service | 4006 |
+| base-service | 4007 |
+| crafting-service | 4008 |
+
+Every service answers `GET /health`:
+
+```bash
+curl http://localhost:4007/health
+```
+
+```json
+{"status":"ok","service":"base-service","version":"0.1.0","database":"up","mock_mode":true}
+```
+
+### Running before the whole team is up
+
+base-service and crafting-service ship with `MOCK_MODE`. While it is `true` they use
+built-in stand-ins for the services they depend on, so they run and can be tested on
+their own. Set it to `false` once the real services are in the compose file.
+
+### Testing
+
+`postman/` holds a collection per service. Import them, or run them headless:
+
+```bash
+newman run postman/base-service.postman_collection.json \
+  --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
+```
+
+Tokens come from the service itself:
+
+```bash
+docker compose exec base-service bundle exec rake token:player
+docker compose exec base-service bundle exec rake token:service
+```
+
+### Database scripts
+
+`deploy/db/` holds the schema and the seed data for the Ruby services as plain SQL, for
+anyone who wants to inspect the tables or load them into their own Postgres. The
+containers already migrate and seed themselves, so these are for reference rather than
+a required step.
+
 ## Authentication
 
 All endpoints marked with **Headers: `Authorization: Bearer <jwt>`** require a valid JWT issued by the **Player Service**. The token contains:
