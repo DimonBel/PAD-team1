@@ -45,10 +45,18 @@ newman run postman/base-service.postman_collection.json \
   --env-var playerToken="$PLAYER_TOKEN" \
   --env-var serviceToken="$SERVICE_TOKEN"
 
-# exam-service / world-service don't need --env-var tokens (see above) — just the base_url
-# if the service isn't on its default port:
-newman run postman/exam-service.postman_collection.json
-newman run postman/world-service.postman_collection.json --env-var base_url=http://localhost:4004
+# exam-service / world-service don't need --env-var tokens (see above). Against the shared
+# compose stack, pass the base_url plus the same JWT secrets you put in the root .env — the
+# collections default to each service's local dev secrets otherwise, and every request
+# would come back 401:
+newman run postman/exam-service.postman_collection.json \
+  --env-var base_url=http://localhost:4005 \
+  --env-var jwt_secret="$JWT_SECRET" \
+  --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
+newman run postman/world-service.postman_collection.json \
+  --env-var base_url=http://localhost:4004 \
+  --env-var jwt_secret="$JWT_SECRET" \
+  --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
 ```
 
 Each request asserts its status code, including the failure paths the contract

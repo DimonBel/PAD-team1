@@ -40,8 +40,8 @@
           "    return signingInput + \".\" + signature;",
           "}",
           "",
-          "const jwtSecret = pm.collectionVariables.get(\"jwt_secret\");",
-          "const serviceSecret = pm.collectionVariables.get(\"service_jwt_secret\");",
+          "const jwtSecret = pm.variables.get(\"jwt_secret\");",
+          "const serviceSecret = pm.variables.get(\"service_jwt_secret\");",
           "",
           "pm.collectionVariables.set(",
           "    \"player_token\",",
@@ -60,7 +60,7 @@
     }
   ],
   "variable": [
-    { "key": "base_url", "value": "http://localhost:4000", "type": "string" },
+    { "key": "base_url", "value": "http://localhost:4005", "type": "string" },
     { "key": "jwt_secret", "value": "dev_only_jwt_secret_do_not_use_in_prod", "type": "string" },
     { "key": "service_jwt_secret", "value": "dev_only_service_jwt_secret_do_not_use_in_prod", "type": "string" },
     { "key": "run_id", "value": "", "type": "string" },

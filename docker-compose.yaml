@@ -90,8 +90,6 @@ services:
 
   world-service:
     image: alexandramihalevschi/world-service:0.1.0
-    # The image's own CMD only starts the server — migrations are a separate step
-    # (`bin/migrate`) the release doesn't run on its own, unlike the Ruby services.
     command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
     depends_on:
       world-db:
@@ -122,7 +120,6 @@ services:
 
   exam-service:
     image: alexandramihalevschi/exam-service:0.1.0
-    # Same as world-service: migrate before starting, since the image doesn't do it itself.
     command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
     depends_on:
       exam-db:
