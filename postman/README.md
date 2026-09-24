@@ -7,6 +7,8 @@ headless with [Newman](https://github.com/postmanlabs/newman).
 | --- | --- | --- |
 | `base-service.postman_collection.json` | base-service | `http://localhost:4007` |
 | `crafting-service.postman_collection.json` | crafting-service | `http://localhost:4008` |
+| `zombie-service.postman_collection.json` | zombie-service | `http://localhost:4003` |
+| `resource-service.postman_collection.json` | resource-service | `http://localhost:4006` |
 | `exam-service.postman_collection.json` | exam-service | `http://localhost:4005` (collection variable is `base_url`) |
 | `world-service.postman_collection.json` | world-service | `http://localhost:4004` (collection variable is `base_url`) |
 
@@ -22,6 +24,26 @@ docker compose exec app bundle exec rake token:service
 Paste them into the collection variables `playerToken` and `serviceToken`.
 Public endpoints take the player token; the ones the contract marks `[internal]`
 take the service token, and a player token on those correctly returns 401.
+
+**zombie-service** — start the service, then mint both tokens it expects:
+
+```bash
+docker compose exec zombie-service bundle exec rake token:service
+docker compose exec zombie-service bundle exec rake token:player
+```
+
+Paste them into `serviceToken` and `playerToken`. Zombie endpoints require the
+service token; the player token is used by the authentication folder to verify
+that it is rejected.
+
+**resource-service** — start the service, then mint its service token:
+
+```bash
+docker compose exec resource-service bundle exec rake token:service
+```
+
+Paste it into the collection variable `serviceToken`. All resource endpoints
+except health require the service token.
 
 **exam-service / world-service** — nothing to mint by hand. Each request self-signs its own
 JWT in a pre-request script (bundled `CryptoJS`, HS256, signed with the same dev secrets the
@@ -43,6 +65,11 @@ response forever instead of exercising the endpoint.
 ```bash
 newman run postman/base-service.postman_collection.json \
   --env-var playerToken="$PLAYER_TOKEN" \
+  --env-var serviceToken="$SERVICE_TOKEN"
+newman run postman/zombie-service.postman_collection.json \
+  --env-var serviceToken="$SERVICE_TOKEN" \
+  --env-var playerToken="$PLAYER_TOKEN"
+newman run postman/resource-service.postman_collection.json \
   --env-var serviceToken="$SERVICE_TOKEN"
 
 # exam-service / world-service don't need --env-var tokens (see above). Against the shared

@@ -1,7 +1,6 @@
 # Database scripts
 
-Schema and seed data for the services, dumped from a freshly migrated (and, for exam/world,
-freshly seeded) database.
+Schema and seed data for the services, dumped from freshly migrated and seeded databases.
 
 | File | What it is |
 | --- | --- |
@@ -11,8 +10,12 @@ freshly seeded) database.
 | `crafting-service-seed.sql` | the five starting recipes from the contract |
 | `exam-service-schema.sql` | tables, indexes and constraints for exam-service |
 | `exam-service-seed.sql` | 2 demo courses/exams and 2 players with contrasting pass/fail grades |
+| `resource-service-schema.sql` | tables, indexes and constraints for resource-service |
+| `resource-service-seed.sql` | 4 resource entities and 3 resource points |
 | `world-service-schema.sql` | tables, indexes and constraints for world-service |
 | `world-service-seed.sql` | a small demoable campus: 1 map, 2 zones, 6 rooms, 6 resource nodes, 7 zombie spawns |
+| `zombie-service-schema.sql` | tables, indexes and constraints for zombie-service |
+| `zombie-service-seed.sql` | 3 zombie types, 2 zombie instances and sample inventory |
 
 The containers run their own migrations and seed themselves on boot, so you do not need
 these to run the stack. They are here for inspection, and for loading the data into a
@@ -27,6 +30,12 @@ psql -h localhost -p 5433 -U postgres -d exam_service_dev -f exam-service-seed.s
 
 psql -h localhost -p 5434 -U postgres -d world_service_dev -f world-service-schema.sql
 psql -h localhost -p 5434 -U postgres -d world_service_dev -f world-service-seed.sql
+
+psql -h localhost -p 5436 -U resource -d resource_service -f resource-service-schema.sql
+psql -h localhost -p 5436 -U resource -d resource_service -f resource-service-seed.sql
+
+psql -h localhost -p 5433 -U zombie -d zombie_service -f zombie-service-schema.sql
+psql -h localhost -p 5433 -U zombie -d zombie_service -f zombie-service-seed.sql
 ```
 
 The seed files insert without checking first, so load them once into an empty database.

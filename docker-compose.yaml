@@ -133,14 +133,72 @@ services:
     ports:
       - "4005:4005"
 
+  # ----------------------------------------------------------------- zombie-service
+  zombie-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${ZOMBIE_DB_USER:-zombie}
+      POSTGRES_PASSWORD: ${ZOMBIE_DB_PASSWORD:?set ZOMBIE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${ZOMBIE_DB_NAME:-zombie_service}
+    volumes:
+      - zombie-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ZOMBIE_DB_USER:-zombie} -d ${ZOMBIE_DB_NAME:-zombie_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  zombie-service:
+    image: tukaram40k/zombie-service:0.1.0
+    depends_on:
+      zombie-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${ZOMBIE_DB_USER:-zombie}:${ZOMBIE_DB_PASSWORD}@zombie-db:5432/${ZOMBIE_DB_NAME:-zombie_service}
+      PORT: 4003
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      MOCK_MODE: ${MOCK_MODE:-true}
+      PLAYER_SERVICE_URL: http://player-service:4001
+      RESOURCE_SERVICE_URL: http://resource-service:4006
+      WORLD_SERVICE_URL: http://world-service:4004
+    ports:
+      - "4003:4003"
+
+  # ----------------------------------------------------------------- resource-service
+  resource-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${RESOURCE_DB_USER:-resource}
+      POSTGRES_PASSWORD: ${RESOURCE_DB_PASSWORD:?set RESOURCE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${RESOURCE_DB_NAME:-resource_service}
+    volumes:
+      - resource-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RESOURCE_DB_USER:-resource} -d ${RESOURCE_DB_NAME:-resource_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  resource-service:
+    image: tukaram40k/resource-service:0.1.0
+    depends_on:
+      resource-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${RESOURCE_DB_USER:-resource}:${RESOURCE_DB_PASSWORD}@resource-db:5432/${RESOURCE_DB_NAME:-resource_service}
+      PORT: 4006
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+    ports:
+      - "4006:4006"
+
   # ------------------------------------------------------------------- the rest
   # Uncomment a block once that service has a public image on Docker Hub.
   # Keep the shape above: own database, own volume, required secrets, distinct port.
   #
   # player-service:    port 4001   owner @DimonBel
   # game-service:      port 4002   owner @DimonBel
-  # zombie-service:    port 4003   owner @tukaram40k
-  # resource-service:  port 4006   owner @tukaram40k
   #
   # base-service and crafting-service ship with MOCK_MODE and stand in for exam-service /
   # world-service / player-service / resource-service until those are also live here — see
@@ -154,3 +212,5 @@ volumes:
   crafting-pgdata:
   world-pgdata:
   exam-pgdata:
+  zombie-pgdata:
+  resource-pgdata:
