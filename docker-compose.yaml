@@ -1,0 +1,296 @@
+# Runs the team's services from the images published on Docker Hub.
+# Nothing here builds from a Dockerfile on purpose: the images are the artefact.
+#
+#   cp .env.example .env     # then fill in every secret
+#   docker compose up -d
+#
+# Each service keeps its own Postgres and its own named volume, so no service can
+# read another one's tables. Ports are distinct so everything runs at once.
+
+services:
+  # ---------------------------------------------------------------- base-service
+  base-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${BASE_DB_USER:-base}
+      POSTGRES_PASSWORD: ${BASE_DB_PASSWORD:?set BASE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${BASE_DB_NAME:-base_service}
+    volumes:
+      - base-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BASE_DB_USER:-base} -d ${BASE_DB_NAME:-base_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  base-service:
+    image: cobili/base-service:0.1.0
+    depends_on:
+      base-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${BASE_DB_USER:-base}:${BASE_DB_PASSWORD}@base-db:5432/${BASE_DB_NAME:-base_service}
+      PORT: 4007
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      MOCK_MODE: ${MOCK_MODE:-true}
+      RESOURCE_SERVICE_URL: http://resource-service:4006
+      WORLD_SERVICE_URL: http://world-service:4004
+      PLAYER_SERVICE_URL: http://player-service:4001
+    ports:
+      - "4007:4007"
+
+  # ------------------------------------------------------------ crafting-service
+  crafting-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${CRAFTING_DB_USER:-crafting}
+      POSTGRES_PASSWORD: ${CRAFTING_DB_PASSWORD:?set CRAFTING_DB_PASSWORD in .env}
+      POSTGRES_DB: ${CRAFTING_DB_NAME:-crafting_service}
+    volumes:
+      - crafting-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CRAFTING_DB_USER:-crafting} -d ${CRAFTING_DB_NAME:-crafting_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  crafting-service:
+    image: cobili/crafting-service:0.1.0
+    depends_on:
+      crafting-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${CRAFTING_DB_USER:-crafting}:${CRAFTING_DB_PASSWORD}@crafting-db:5432/${CRAFTING_DB_NAME:-crafting_service}
+      PORT: 4008
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      MOCK_MODE: ${MOCK_MODE:-true}
+      RESOURCE_SERVICE_URL: http://resource-service:4006
+      PLAYER_SERVICE_URL: http://player-service:4001
+      EXAM_SERVICE_URL: http://exam-service:4005
+      WORLD_SERVICE_URL: http://world-service:4004
+    ports:
+      - "4008:4008"
+
+  # ----------------------------------------------------------------- world-service
+  world-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${WORLD_DB_USER:-world}
+      POSTGRES_PASSWORD: ${WORLD_DB_PASSWORD:?set WORLD_DB_PASSWORD in .env}
+      POSTGRES_DB: ${WORLD_DB_NAME:-world_service}
+    volumes:
+      - world-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WORLD_DB_USER:-world} -d ${WORLD_DB_NAME:-world_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  world-service:
+    image: alexandramihalevschi/world-service:0.1.0
+    command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
+    depends_on:
+      world-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${WORLD_DB_USER:-world}:${WORLD_DB_PASSWORD}@world-db:5432/${WORLD_DB_NAME:-world_service}
+      SECRET_KEY_BASE: ${WORLD_SECRET_KEY_BASE:?set WORLD_SECRET_KEY_BASE in .env}
+      PORT: 4004
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+    ports:
+      - "4004:4004"
+
+  # ------------------------------------------------------------------ exam-service
+  exam-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${EXAM_DB_USER:-exam}
+      POSTGRES_PASSWORD: ${EXAM_DB_PASSWORD:?set EXAM_DB_PASSWORD in .env}
+      POSTGRES_DB: ${EXAM_DB_NAME:-exam_service}
+    volumes:
+      - exam-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EXAM_DB_USER:-exam} -d ${EXAM_DB_NAME:-exam_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  exam-service:
+    image: alexandramihalevschi/exam-service:0.1.0
+    command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
+    depends_on:
+      exam-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${EXAM_DB_USER:-exam}:${EXAM_DB_PASSWORD}@exam-db:5432/${EXAM_DB_NAME:-exam_service}
+      SECRET_KEY_BASE: ${EXAM_SECRET_KEY_BASE:?set EXAM_SECRET_KEY_BASE in .env}
+      PORT: 4005
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+    ports:
+      - "4005:4005"
+
+  # ----------------------------------------------------------------- zombie-service
+  zombie-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${ZOMBIE_DB_USER:-zombie}
+      POSTGRES_PASSWORD: ${ZOMBIE_DB_PASSWORD:?set ZOMBIE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${ZOMBIE_DB_NAME:-zombie_service}
+    volumes:
+      - zombie-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ZOMBIE_DB_USER:-zombie} -d ${ZOMBIE_DB_NAME:-zombie_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  zombie-service:
+    image: tukaram40k/zombie-service:0.1.0
+    depends_on:
+      zombie-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${ZOMBIE_DB_USER:-zombie}:${ZOMBIE_DB_PASSWORD}@zombie-db:5432/${ZOMBIE_DB_NAME:-zombie_service}
+      PORT: 4003
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      MOCK_MODE: ${MOCK_MODE:-true}
+      PLAYER_SERVICE_URL: http://player-service:4001
+      RESOURCE_SERVICE_URL: http://resource-service:4006
+      WORLD_SERVICE_URL: http://world-service:4004
+    ports:
+      - "4003:4003"
+
+  # ----------------------------------------------------------------- resource-service
+  resource-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${RESOURCE_DB_USER:-resource}
+      POSTGRES_PASSWORD: ${RESOURCE_DB_PASSWORD:?set RESOURCE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${RESOURCE_DB_NAME:-resource_service}
+    volumes:
+      - resource-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RESOURCE_DB_USER:-resource} -d ${RESOURCE_DB_NAME:-resource_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  resource-service:
+    image: tukaram40k/resource-service:0.1.0
+    depends_on:
+      resource-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${RESOURCE_DB_USER:-resource}:${RESOURCE_DB_PASSWORD}@resource-db:5432/${RESOURCE_DB_NAME:-resource_service}
+      PORT: 4006
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+    ports:
+      - "4006:4006"
+
+  # ---------------------------------------------------------------- player-service
+  player-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PLAYER_DB_USER:-player}
+      POSTGRES_PASSWORD: ${PLAYER_DB_PASSWORD:?set PLAYER_DB_PASSWORD in .env}
+      POSTGRES_DB: ${PLAYER_DB_NAME:-player_service}
+    volumes:
+      - player-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PLAYER_DB_USER:-player} -d ${PLAYER_DB_NAME:-player_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  player-service:
+    image: dimon1/player-service:0.1.1
+    depends_on:
+      player-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ecto://${PLAYER_DB_USER:-player}:${PLAYER_DB_PASSWORD}@player-db:5432/${PLAYER_DB_NAME:-player_service}
+      # Its entrypoint waits on Postgres with pg_isready before migrating, so it
+      # needs the host and credentials as separate variables too.
+      POSTGRES_HOST: player-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${PLAYER_DB_USER:-player}
+      POSTGRES_PASSWORD: ${PLAYER_DB_PASSWORD}
+      POSTGRES_DB: ${PLAYER_DB_NAME:-player_service}
+      PHX_HOST: localhost
+      PHX_PORT: 4001
+      SECRET_KEY_BASE: ${PLAYER_SECRET_KEY_BASE:?set PLAYER_SECRET_KEY_BASE in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # player-service calls the shared service secret INTERNAL_JWT_SECRET. Map the
+      # team-wide name onto its own so every service still signs the same tokens.
+      INTERNAL_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      JWT_TTL_MIN: ${PLAYER_JWT_TTL_MIN:-60}
+      TRADE_TTL_SECONDS: ${PLAYER_TRADE_TTL_SECONDS:-600}
+      IDEMPOTENCY_TTL_SECONDS: ${PLAYER_IDEMPOTENCY_TTL_SECONDS:-86400}
+    ports:
+      - "4001:4001"
+
+  # ------------------------------------------------------------------ game-service
+  game-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${GAME_DB_USER:-game}
+      POSTGRES_PASSWORD: ${GAME_DB_PASSWORD:?set GAME_DB_PASSWORD in .env}
+      POSTGRES_DB: ${GAME_DB_NAME:-game_service}
+    volumes:
+      - game-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GAME_DB_USER:-game} -d ${GAME_DB_NAME:-game_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  game-service:
+    image: dimon1/game-service:0.1.0
+    # The release's start script ships without the executable bit, so the image's
+    # own CMD (/app/bin/server) exits with "permission denied". Invoking it through
+    # sh runs the same script and migrates and seeds exactly as it was meant to.
+    # Drop this line once the bit is fixed upstream.
+    command: ["sh", "/app/bin/server"]
+    depends_on:
+      game-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ecto://${GAME_DB_USER:-game}:${GAME_DB_PASSWORD}@game-db:5432/${GAME_DB_NAME:-game_service}
+      SECRET_KEY_BASE: ${GAME_SECRET_KEY_BASE:?set GAME_SECRET_KEY_BASE in .env}
+      PORT: 4002
+      PHX_HOST: localhost
+      PHX_SCHEME: http
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # game-service defaults this to true, which accepts unsigned requests and
+      # waves through the endpoints the contract marks internal. The whole team is
+      # in this compose file, so enforce real tokens here.
+      BYPASS_AUTH: ${GAME_BYPASS_AUTH:-false}
+    ports:
+      - "4002:4002"
+
+  # ------------------------------------------------------------------- the rest
+  # Every service in the contract is now in this file. Keep the shape above for
+  # anything new: own database, own volume, required secrets, distinct port.
+  #
+  # base-service and crafting-service ship with MOCK_MODE and stand in for exam-service /
+  # world-service / player-service / resource-service until those are also live here — see
+  # "Running before the whole team is up" in the root README. exam-service and world-service
+  # don't have a MOCK_MODE toggle of their own: their outbound calls (Player/World/Crafting
+  # Service from exam-service; Resource/Crafting Service from world-service) are unconditional
+  # stubs that only log, regardless of what else is running in this compose file.
+
+volumes:
+  player-pgdata:
+  game-pgdata:
+  base-pgdata:
+  crafting-pgdata:
+  world-pgdata:
+  exam-pgdata:
+  zombie-pgdata:
+  resource-pgdata:

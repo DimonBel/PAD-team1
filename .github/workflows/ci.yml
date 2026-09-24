@@ -44,9 +44,7 @@ jobs:
         run: |
           set -eu
           # U+FFFD replacement character, and the cp1251-read-as-utf8 arrow artefact.
-          # The convention audit is excluded: it quotes the bad strings on purpose.
-          if grep -rIn -e 'в†' -e '�' --include='*.md' \
-               --exclude='CONVENTION-VIOLATIONS.md' .; then
+          if grep -rIn -e 'в†' -e '�' --include='*.md' .; then
             echo "::error::Mojibake found in Markdown. Re-save the file as UTF-8."
             exit 1
           fi

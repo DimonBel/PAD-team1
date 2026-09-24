@@ -1,0 +1,132 @@
+{
+  "info": {
+    "name": "resource-service",
+    "description": "All resource-service endpoints. Set serviceToken before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4006" },
+    { "key": "serviceToken", "value": "" },
+    { "key": "pointId", "value": "point-uuid-001" },
+    { "key": "createdPointId", "value": "" },
+    { "key": "entityType", "value": "player" },
+    { "key": "entityId", "value": "player-uuid-123" },
+    { "key": "transactionId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{serviceToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/health" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().service).to.eql('resource-service');"] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 Authentication",
+      "item": [
+        {
+          "name": "No token is rejected",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "header": [], "url": "{{baseUrl}}/api/resources/points" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "02 Resource Points",
+      "item": [
+        {
+          "name": "List points",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/resources/points" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Filter points",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/resources/points?room_id=lab-204&resource=metal-01" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json()).to.be.an('array');", "pm.expect(pm.response.json()[0].resource).to.eql('metal-01');"] } }]
+        },
+        {
+          "name": "Get point",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/resources/points/{{pointId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().point_id).to.eql(pm.collectionVariables.get('pointId') || 'point-uuid-001');"] } }]
+        },
+        {
+          "name": "Create point",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"room_id\": \"postman-room-{{$guid}}\",\n  \"resource\": \"postman-resource\",\n  \"amount\": 5,\n  \"max_amount\": 10\n}" }, "url": "{{baseUrl}}/api/resources/points" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 201', () => pm.response.to.have.status(201));", "pm.expect(pm.response.json().point_id).to.be.a('string').and.not.empty;", "pm.expect(pm.response.json().amount).to.eql(5);", "pm.collectionVariables.set('createdPointId', pm.response.json().point_id);"] } }]
+        },
+        {
+          "name": "Update point",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"max_amount\": 35}" }, "url": "{{baseUrl}}/api/resources/points/{{createdPointId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().max_amount).to.eql(35);", "pm.expect(pm.response.json().point_id).to.eql(pm.collectionVariables.get('createdPointId')); "] } }]
+        },
+        {
+          "name": "Delete point",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/resources/points/{{createdPointId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().deleted).to.eql(true);", "pm.expect(pm.response.json().point_id).to.eql(pm.collectionVariables.get('createdPointId')); "] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 Map",
+      "item": [
+        {
+          "name": "Read map",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/resources/map?room_id=lab-204" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json()).to.be.an('array');", "pm.expect(pm.response.json().some((row) => row.resource === 'metal-01')).to.eql(true);"] } }]
+        },
+        {
+          "name": "Set map amount",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"event_id\":\"{{$guid}}\",\"room_id\":\"lab-204\",\"resource\":\"metal-01\",\"operation\":\"set\",\"amount\":20}" }, "url": "{{baseUrl}}/api/resources/map" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().amount).to.eql(20);", "pm.expect(pm.response.json().resource).to.eql('metal-01');"] } }]
+        },
+        {
+          "name": "Remove map amount with insufficient stock",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"event_id\":\"{{$guid}}\",\"room_id\":\"lab-204\",\"resource\":\"metal-01\",\"operation\":\"remove\",\"amount\":9999}" }, "url": "{{baseUrl}}/api/resources/map" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 409', () => pm.response.to.have.status(409));", "pm.expect(pm.response.json().error).to.contain('Insufficient amount');"] } }]
+        }
+      ]
+    },
+    {
+      "name": "04 Entities",
+      "item": [
+        {
+          "name": "Get entity inventory",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/resources/entities/{{entityType}}/{{entityId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json()).to.be.an('array');"] } }]
+        },
+        {
+          "name": "Add entity resources",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"event_id\":\"{{$guid}}\",\"operation\":\"add\",\"items\":[{\"item_id\":\"metal-01\",\"count\":3}]}" }, "url": "{{baseUrl}}/api/resources/entities/{{entityType}}/{{entityId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json()).to.be.an('array');", "pm.expect(pm.response.json().some((row) => row.item_id === 'metal-01')).to.eql(true);"] } }]
+        },
+        {
+          "name": "Remove entity resources with insufficient stock",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"event_id\":\"{{$guid}}\",\"operation\":\"remove\",\"items\":[{\"item_id\":\"metal-01\",\"count\":9999}]}" }, "url": "{{baseUrl}}/api/resources/entities/{{entityType}}/{{entityId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 409', () => pm.response.to.have.status(409));", "pm.expect(pm.response.json().error).to.contain('Insufficient stock');"] } }]
+        }
+      ]
+    },
+    {
+      "name": "05 Gather and Transactions",
+      "item": [
+        {
+          "name": "Gather",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"event_id\": \"{{$guid}}\",\n  \"point_id\": \"{{pointId}}\",\n  \"resource\": \"metal-01\",\n  \"entity_type\": \"{{entityType}}\",\n  \"entity_id\": \"{{entityId}}\",\n  \"requested_amount\": 2\n}" }, "url": "{{baseUrl}}/api/resources/gather" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('transactionId', pm.response.json().transaction_id);"] } }]
+        },
+        {
+          "name": "Get transaction",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/resources/transactions/{{transactionId}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().transaction_id).to.eql(pm.collectionVariables.get('transactionId'));", "pm.expect(pm.response.json().type).to.eql('gather');", "pm.expect(pm.response.json().status).to.eql('completed');"] } }]
+        }
+      ]
+    }
+  ]
+}

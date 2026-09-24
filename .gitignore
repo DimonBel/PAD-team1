@@ -1,2 +1,7 @@
 # Local tooling scratch
 .omc/
+
+#secrets, never commit
+.env
+.env.*
+!.env.example
