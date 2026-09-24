@@ -57,8 +57,8 @@ world-service start empty, and their demo data is loaded separately (see
 | crafting-service | [`cobili/crafting-service:0.1.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
 | player-service | not published yet | Dmitrii Belih |
 | game-service | not published yet | Dmitrii Belih |
-| zombie-service | not published yet | Ivan Rudenco |
-| resource-service | not published yet | Ivan Rudenco |
+| zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
+| resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | exam-service | [`alexandramihalevschi/exam-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
 | world-service | [`alexandramihalevschi/world-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 
@@ -73,6 +73,8 @@ a block once its image exists.
 | Service | Required env (from `.env`) | Notes |
 | --- | --- | --- |
 | base-service, crafting-service | `*_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | `MOCK_MODE` optional, defaults to `true` |
+| zombie-service | `ZOMBIE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | `MOCK_MODE` optional, defaults to `true`; also calls Player, Resource and World Services |
+| resource-service | `RESOURCE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Service-to-service JWT authentication |
 | exam-service, world-service | `*_DB_PASSWORD`, `*_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Phoenix releases: `SECRET_KEY_BASE` is required on top of the shared secrets. The image's own `CMD` doesn't migrate, so `docker-compose.yaml` runs `bin/migrate` before `bin/server` |
 
 #### Building exam-service / world-service from source
@@ -102,7 +104,7 @@ that service alone. See its README.
 | base-service | 4007 |
 | crafting-service | 4008 |
 
-base-service and crafting-service answer `GET /health`:
+base-service, crafting-service, zombie-service and resource-service answer `GET /health`:
 
 ```bash
 curl http://localhost:4007/health
@@ -110,6 +112,13 @@ curl http://localhost:4007/health
 
 ```json
 {"status":"ok","service":"base-service","version":"0.1.0","database":"up","mock_mode":true}
+```
+
+The other Ruby services use their own ports:
+
+```bash
+curl http://localhost:4003/health  # zombie-service
+curl http://localhost:4006/health  # resource-service
 ```
 
 exam-service and world-service have no `/health` endpoint yet. Any API route confirms
@@ -122,7 +131,7 @@ curl -i http://localhost:4004/api/world/zones    # world-service -> 401
 
 ### Running before the whole team is up
 
-base-service and crafting-service ship with `MOCK_MODE`. While it is `true` they use
+base-service, crafting-service and zombie-service ship with `MOCK_MODE`. While it is `true` they use
 built-in stand-ins for the services they depend on, so they run and can be tested on
 their own. Set it to `false` once the real services are in the compose file.
 
@@ -148,6 +157,10 @@ prefixed `[stub PlayerService]`, `[stub WorldService]` and so on.
 ```bash
 newman run postman/base-service.postman_collection.json \
   --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
+newman run postman/zombie-service.postman_collection.json \
+  --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
+newman run postman/resource-service.postman_collection.json \
+  --env-var serviceToken="$SERVICE_TOKEN"
 ```
 
 Tokens come from the service itself:
@@ -155,6 +168,9 @@ Tokens come from the service itself:
 ```bash
 docker compose exec base-service bundle exec rake token:player
 docker compose exec base-service bundle exec rake token:service
+docker compose exec zombie-service bundle exec rake token:player
+docker compose exec zombie-service bundle exec rake token:service
+docker compose exec resource-service bundle exec rake token:service
 ```
 
 The exam-service and world-service collections sign their own tokens in a pre-request
@@ -171,10 +187,9 @@ See `postman/README.md` for details and last-run results.
 
 ### Database scripts
 
-`deploy/db/` holds the schema and the seed data for base-service, crafting-service,
-exam-service and world-service as plain SQL, for anyone who wants to inspect the tables or
-load them into their own Postgres. The Ruby containers migrate and seed themselves, so
-their files are for reference.
+`deploy/db/` holds the schema and the seed data for six services as plain SQL, for
+anyone who wants to inspect the tables or load them into their own Postgres. The Ruby
+containers migrate and seed themselves, so their files are for reference.
 
 exam-service and world-service migrate on boot but don't seed. To load their demo data
 into the running stack, pipe the seed dump into each database container:
