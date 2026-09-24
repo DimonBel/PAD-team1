@@ -55,8 +55,8 @@ world-service start empty, and their demo data is loaded separately (see
 | --- | --- | --- |
 | base-service | [`cobili/base-service:0.1.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
 | crafting-service | [`cobili/crafting-service:0.1.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
-| player-service | not published yet | Dmitrii Belih |
-| game-service | not published yet | Dmitrii Belih |
+| player-service | [`dimon1/player-service:0.1.1`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
+| game-service | [`dimon1/game-service:0.1.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | exam-service | [`alexandramihalevschi/exam-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
@@ -65,8 +65,8 @@ world-service start empty, and their demo data is loaded separately (see
 The tag is the service version, so `cobili/base-service:0.1.0` is version 0.1.0.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
 
-Services that are not published yet are commented out in `docker-compose.yaml`. Uncomment
-a block once its image exists.
+Every service in the contract is now in `docker-compose.yaml`; there is nothing left to
+uncomment.
 
 #### What each image needs
 
@@ -76,6 +76,8 @@ a block once its image exists.
 | zombie-service | `ZOMBIE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | `MOCK_MODE` optional, defaults to `true`; also calls Player, Resource and World Services |
 | resource-service | `RESOURCE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Service-to-service JWT authentication |
 | exam-service, world-service | `*_DB_PASSWORD`, `*_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Phoenix releases: `SECRET_KEY_BASE` is required on top of the shared secrets. The image's own `CMD` doesn't migrate, so `docker-compose.yaml` runs `bin/migrate` before `bin/server` |
+| player-service | `PLAYER_DB_PASSWORD`, `PLAYER_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | It calls the shared service secret `INTERNAL_JWT_SECRET`, so `docker-compose.yaml` maps `SERVICE_JWT_SECRET` onto it — every service still signs the same tokens. Its entrypoint waits on Postgres and migrates before starting, so it also needs `POSTGRES_HOST` and the credentials as separate variables |
+| game-service | `GAME_DB_PASSWORD`, `GAME_SECRET_KEY_BASE`, `JWT_SECRET` | Has no service secret of its own: it checks for a `service` role in a token signed with `JWT_SECRET`. `GAME_BYPASS_AUTH` defaults to `false` here — the service's own default is `true`, which accepts unsigned requests. Its release start script ships without the executable bit, so `docker-compose.yaml` runs it as `sh /app/bin/server` |
 
 #### Building exam-service / world-service from source
 
@@ -104,7 +106,8 @@ that service alone. See its README.
 | base-service | 4007 |
 | crafting-service | 4008 |
 
-base-service, crafting-service, zombie-service and resource-service answer `GET /health`:
+base-service, crafting-service, zombie-service, resource-service and game-service answer
+`GET /health`; player-service answers `GET /api/health`:
 
 ```bash
 curl http://localhost:4007/health
@@ -119,6 +122,14 @@ The other Ruby services use their own ports:
 ```bash
 curl http://localhost:4003/health  # zombie-service
 curl http://localhost:4006/health  # resource-service
+curl http://localhost:4002/health  # game-service
+curl http://localhost:4001/api/health  # player-service, note the /api prefix
+```
+
+game-service reports whether auth enforcement is on, which is worth checking after a boot:
+
+```json
+{"status":"ok","version":"0.1.0","service":"game-service","database":"up","auth_bypass":false,"running_sessions":0}
 ```
 
 exam-service and world-service have no `/health` endpoint yet. Any API route confirms
@@ -130,6 +141,15 @@ curl -i http://localhost:4004/api/world/zones    # world-service -> 401
 ```
 
 ### Running before the whole team is up
+
+player-service ships with mock clients of its own, under `lib/player_service/mocks/`, and
+records every call it would have made in a `mock_invocations` table, so its own endpoints work
+before the services it talks to are reachable.
+
+game-service has no `MOCK_MODE`. It has `BYPASS_AUTH`, which is a different thing: it disables
+token checks rather than stubbing outbound calls, and `docker-compose.yaml` turns it off. Its
+outbound calls live in `lib/game_service/clients/` and are real HTTP calls to the other
+services in this compose file.
 
 base-service, crafting-service and zombie-service ship with `MOCK_MODE`. While it is `true` they use
 built-in stand-ins for the services they depend on, so they run and can be tested on
@@ -183,11 +203,24 @@ newman run postman/world-service.postman_collection.json \
   --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
 ```
 
+player-service and game-service have collections too, copied from each service's own
+repository with the base URL pointed at the port the shared stack publishes:
+
+```bash
+newman run postman/player-service.postman_collection.json --env-var base_url=http://localhost:4001
+newman run postman/game-service.postman_collection.json \
+  --env-var baseUrl=http://localhost:4002 \
+  --env-var token="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
+```
+
+player-service mints its own tokens through the collection: it registers, logs in and reuses
+the JWT. game-service needs real tokens passed in, because `BYPASS_AUTH` is `false` here.
+
 See `postman/README.md` for details and last-run results.
 
 ### Database scripts
 
-`deploy/db/` holds the schema and the seed data for six services as plain SQL, for
+`deploy/db/` holds the schema and the seed data for all eight services as plain SQL, for
 anyone who wants to inspect the tables or load them into their own Postgres. The Ruby
 containers migrate and seed themselves, so their files are for reference.
 
@@ -198,6 +231,10 @@ into the running stack, pipe the seed dump into each database container:
 docker compose exec -T exam-db psql -U exam -d exam_service < deploy/db/exam-service-seed.sql
 docker compose exec -T world-db psql -U world -d world_service < deploy/db/world-service-seed.sql
 ```
+
+player-service's seed dump is deliberately partial: its own seed script aborts partway, so
+only players and their inventory are in there. `deploy/db/README.md` explains why and what to
+fix. game-service migrates and seeds itself on boot like the Ruby services.
 
 Only the seed file is needed here, because the migrations already created the tables. On
 Windows PowerShell, `<` doesn't work, so use

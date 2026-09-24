@@ -1,0 +1,361 @@
+{
+  "info": {
+    "name": "Player Service — Local",
+    "description": "Full test collection for the Player Service. Run `docker compose up` then import this file. Variables `base_url`, `jwt`, `player_id`, `friend_id`, `service_token`, `dev_token` and counters (`item_id`, `trade_id`, `friendship_id`) are populated by the requests themselves.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:4001"},
+    {"key": "jwt", "value": ""},
+    {"key": "player_id", "value": ""},
+    {"key": "player2_id", "value": ""},
+    {"key": "friend_id", "value": ""},
+    {"key": "item_id", "value": ""},
+    {"key": "trade_id", "value": ""},
+    {"key": "friendship_id", "value": ""},
+    {"key": "service_token", "value": ""},
+    {"key": "dev_token", "value": "dev"}
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{base_url}}/api/health", "host": ["{{base_url}}"], "path": ["api", "health"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.expect(b.status).to.eql('ok');"]}}]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Alice",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"username\":\"alice_postman\",\"email\":\"alice_postman@faf.university\",\"password\":\"alicepass123\"}"},
+            "url": {"raw": "{{base_url}}/api/players/register", "host": ["{{base_url}}"], "path": ["api", "players", "register"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 201', () => pm.response.to.have.status(201));", "const b = pm.response.json(); pm.collectionVariables.set('player_id', b.player_id);"]}}]
+        },
+        {
+          "name": "Register Bob",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"username\":\"bob_postman\",\"email\":\"bob_postman@faf.university\",\"password\":\"bobpass123\"}"},
+            "url": {"raw": "{{base_url}}/api/players/register", "host": ["{{base_url}}"], "path": ["api", "players", "register"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 201', () => pm.response.to.have.status(201));", "const b = pm.response.json(); pm.collectionVariables.set('player2_id', b.player_id);"]}}]
+        },
+        {
+          "name": "Login Alice",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"email\":\"alice_postman@faf.university\",\"password\":\"alicepass123\"}"},
+            "url": {"raw": "{{base_url}}/api/players/login", "host": ["{{base_url}}"], "path": ["api", "players", "login"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.collectionVariables.set('jwt', b.jwt);"]}}]
+        },
+        {
+          "name": "Login Bob",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"email\":\"bob_postman@faf.university\",\"password\":\"bobpass123\"}"},
+            "url": {"raw": "{{base_url}}/api/players/login", "host": ["{{base_url}}"], "path": ["api", "players", "login"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]
+        },
+        {
+          "name": "Mint Service Token (dev)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Dev-Token", "value": "{{dev_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"service\":\"game-service\"}"},
+            "url": {"raw": "{{base_url}}/api/_dev/mint_service_token", "host": ["{{base_url}}"], "path": ["api", "_dev", "mint_service_token"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.collectionVariables.set('service_token', b.token);"]}}]
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "GET /api/players/{player_id}",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.expect(b).to.have.property('username');", "pm.expect(b).to.have.property('level');", "pm.expect(b).to.have.property('xp');"]}}]
+        },
+        {
+          "name": "PATCH /api/players/{player_id}",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"title\":\"Pumpkin Slayer\",\"avatar\":\"axe_wielding\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.expect(b.title).to.eql('Pumpkin Slayer');"]}}]
+        },
+        {
+          "name": "GET /api/players/{player_id} (after PATCH)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().title).to.eql('Pumpkin Slayer');"]}}]
+        }
+      ]
+    },
+    {
+      "name": "XP",
+      "item": [
+        {
+          "name": "GET /api/players/{player_id}/xp",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/xp", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "xp"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.expect(b).to.have.keys(['player_id','xp','level','xp_to_next_level']);"]}}]
+        },
+        {
+          "name": "PATCH /api/players/{player_id}/xp (service)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{service_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"operation_id\":\"xp-op-{{$randomUUID}}\",\"delta\":250,\"reason\":\"EXAM_PASSED\",\"source_service\":\"exam-service\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/xp", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "xp"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.expect(b.xp).to.be.above(0);"]}}]
+        },
+        {
+          "name": "PATCH /api/players/{player_id}/xp (idempotency replay)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{service_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"operation_id\":\"xp-op-replay-{{$randomUUID}}\",\"delta\":100,\"reason\":\"ZOMBIE_KILLED\",\"source_service\":\"game-service\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/xp", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "xp"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "GET /api/players/{player_id}/inventory (empty)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/inventory", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "inventory"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json()).to.be.an('array');"]}}]
+        },
+        {
+          "name": "POST /api/players/{player_id}/inventory (service — grant coffee)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{service_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"operation_id\":\"grant-coffee-{{$randomUUID}}\",\"code\":\"COFFEE\",\"type\":\"consumable\",\"quantity\":3,\"source\":\"crafting-service\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/inventory", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "inventory"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 201', () => pm.response.to.have.status(201));", "const b = pm.response.json(); pm.collectionVariables.set('item_id', b.item_id);"]}}]
+        },
+        {
+          "name": "POST /api/players/{player_id}/inventory (idempotent replay → cached)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{service_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"operation_id\":\"grant-coffee-replay-{{$randomUUID}}\",\"code\":\"ENERGY_DRINK\",\"type\":\"consumable\",\"quantity\":1,\"source\":\"game-service\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/inventory", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "inventory"]}
+          }
+        },
+        {
+          "name": "POST /api/players/{player_id}/inventory (replay same op_id → returns cached, no double grant)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{service_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"operation_id\":\"grant-coffee-replay-{{$randomUUID}}\",\"code\":\"ENERGY_DRINK\",\"type\":\"consumable\",\"quantity\":1,\"source\":\"game-service\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/inventory", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "inventory"]}
+          }
+        },
+        {
+          "name": "GET /api/players/{player_id}/inventory (after grants)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/inventory", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "inventory"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const items = pm.response.json(); pm.expect(items.length).to.be.above(0);"]}}]
+        },
+        {
+          "name": "PATCH /api/players/{player_id}/inventory/{item_id} (consume -1)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"operation_id\":\"consume-{{$randomUUID}}\",\"delta\":-1,\"reason\":\"CONSUMED\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/inventory/{{item_id}}", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "inventory", "{{item_id}}"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]
+        }
+      ]
+    },
+    {
+      "name": "Friends",
+      "item": [
+        {
+          "name": "POST /api/players/{player_id}/friends",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"target_player_id\":\"{{player2_id}}\"}"},
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/friends", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "friends"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 201', () => pm.response.to.have.status(201));", "const b = pm.response.json(); pm.collectionVariables.set('friendship_id', b.friendship_id);"]}}]
+        },
+        {
+          "name": "GET /api/players/{player_id}/friends (empty until accepted)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/friends", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "friends"]}
+          }
+        },
+        {
+          "name": "DELETE /api/players/{player_id}/friends/{friendship_id}",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}/friends/{{friendship_id}}", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}", "friends", "{{friendship_id}}"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 204', () => pm.response.to.have.status(204));"]}}]
+        }
+      ]
+    },
+    {
+      "name": "Trades",
+      "item": [
+        {
+          "name": "POST /api/trades (open trade — needs item to offer)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"from_player_id\":\"{{player_id}}\",\"to_player_id\":\"{{player2_id}}\",\"offered_items\":[{\"item_id\":\"{{item_id}}\",\"quantity\":1}],\"requested_items\":[{\"code\":\"ENERGY_DRINK\",\"quantity\":1}]}"},
+            "url": {"raw": "{{base_url}}/api/trades", "host": ["{{base_url}}"], "path": ["api", "trades"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 201', () => pm.response.to.have.status(201));", "const b = pm.response.json(); pm.collectionVariables.set('trade_id', b.trade_id);"]}}]
+        },
+        {
+          "name": "GET /api/trades?player_id&status=PENDING",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/trades?player_id={{player_id}}&status=pending", "host": ["{{base_url}}"], "path": ["api", "trades"], "query": [{"key": "player_id", "value": "{{player_id}}"}, {"key": "status", "value": "pending"}]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.expect(b.trades.length).to.be.above(0);"]}}]
+        },
+        {
+          "name": "POST /api/trades/{trade_id}/reject (cancels + unlocks)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{}"},
+            "url": {"raw": "{{base_url}}/api/trades/{{trade_id}}/reject", "host": ["{{base_url}}"], "path": ["api", "trades", "{{trade_id}}", "reject"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "pm.expect(pm.response.json().status).to.eql('rejected');"]}}]
+        }
+      ]
+    },
+    {
+      "name": "Mocks & Simulate (dev)",
+      "item": [
+        {
+          "name": "POST /api/_dev/simulate/zombie_kill",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Dev-Token", "value": "{{dev_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"player_id\":\"{{player_id}}\",\"xp\":75}"},
+            "url": {"raw": "{{base_url}}/api/_dev/simulate/zombie_kill", "host": ["{{base_url}}"], "path": ["api", "_dev", "simulate", "zombie_kill"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]
+        },
+        {
+          "name": "POST /api/_dev/simulate/exam_passed",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Dev-Token", "value": "{{dev_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"player_id\":\"{{player_id}}\",\"xp\":250}"},
+            "url": {"raw": "{{base_url}}/api/_dev/simulate/exam_passed", "host": ["{{base_url}}"], "path": ["api", "_dev", "simulate", "exam_passed"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]
+        },
+        {
+          "name": "POST /api/_dev/simulate/loot_drop",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Dev-Token", "value": "{{dev_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"player_id\":\"{{player_id}}\",\"code\":\"DAVIDAN_SANDWICH\",\"quantity\":1}"},
+            "url": {"raw": "{{base_url}}/api/_dev/simulate/loot_drop", "host": ["{{base_url}}"], "path": ["api", "_dev", "simulate", "loot_drop"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]
+        },
+        {
+          "name": "POST /api/_dev/simulate/craft",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Dev-Token", "value": "{{dev_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"player_id\":\"{{player_id}}\",\"code\":\"ZOMBIE_DETECTOR\",\"quantity\":1}"},
+            "url": {"raw": "{{base_url}}/api/_dev/simulate/craft", "host": ["{{base_url}}"], "path": ["api", "_dev", "simulate", "craft"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]
+        },
+        {
+          "name": "POST /api/_dev/simulate/world_reward",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-Dev-Token", "value": "{{dev_token}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"player_id\":\"{{player_id}}\",\"code\":\"ENERGY_DRINK\",\"quantity\":2}"},
+            "url": {"raw": "{{base_url}}/api/_dev/simulate/world_reward", "host": ["{{base_url}}"], "path": ["api", "_dev", "simulate", "world_reward"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));"]}}]
+        },
+        {
+          "name": "GET /api/_dev/mock_log",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "X-Dev-Token", "value": "{{dev_token}}"}],
+            "url": {"raw": "{{base_url}}/api/_dev/mock_log", "host": ["{{base_url}}"], "path": ["api", "_dev", "mock_log"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 200', () => pm.response.to.have.status(200));", "const b = pm.response.json(); pm.expect(b.invocations).to.be.an('array');"]}}]
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "DELETE /api/players/{player_id}",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt}}"}],
+            "url": {"raw": "{{base_url}}/api/players/{{player_id}}", "host": ["{{base_url}}"], "path": ["api", "players", "{{player_id}}"]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test('status 204', () => pm.response.to.have.status(204));"]}}]
+        }
+      ]
+    }
+  ]
+}
