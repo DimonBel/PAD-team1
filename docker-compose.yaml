@@ -193,12 +193,90 @@ services:
     ports:
       - "4006:4006"
 
+  # ---------------------------------------------------------------- player-service
+  player-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PLAYER_DB_USER:-player}
+      POSTGRES_PASSWORD: ${PLAYER_DB_PASSWORD:?set PLAYER_DB_PASSWORD in .env}
+      POSTGRES_DB: ${PLAYER_DB_NAME:-player_service}
+    volumes:
+      - player-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PLAYER_DB_USER:-player} -d ${PLAYER_DB_NAME:-player_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  player-service:
+    image: dimon1/player-service:0.1.1
+    depends_on:
+      player-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ecto://${PLAYER_DB_USER:-player}:${PLAYER_DB_PASSWORD}@player-db:5432/${PLAYER_DB_NAME:-player_service}
+      # Its entrypoint waits on Postgres with pg_isready before migrating, so it
+      # needs the host and credentials as separate variables too.
+      POSTGRES_HOST: player-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${PLAYER_DB_USER:-player}
+      POSTGRES_PASSWORD: ${PLAYER_DB_PASSWORD}
+      POSTGRES_DB: ${PLAYER_DB_NAME:-player_service}
+      PHX_HOST: localhost
+      PHX_PORT: 4001
+      SECRET_KEY_BASE: ${PLAYER_SECRET_KEY_BASE:?set PLAYER_SECRET_KEY_BASE in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # player-service calls the shared service secret INTERNAL_JWT_SECRET. Map the
+      # team-wide name onto its own so every service still signs the same tokens.
+      INTERNAL_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      JWT_TTL_MIN: ${PLAYER_JWT_TTL_MIN:-60}
+      TRADE_TTL_SECONDS: ${PLAYER_TRADE_TTL_SECONDS:-600}
+      IDEMPOTENCY_TTL_SECONDS: ${PLAYER_IDEMPOTENCY_TTL_SECONDS:-86400}
+    ports:
+      - "4001:4001"
+
+  # ------------------------------------------------------------------ game-service
+  game-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${GAME_DB_USER:-game}
+      POSTGRES_PASSWORD: ${GAME_DB_PASSWORD:?set GAME_DB_PASSWORD in .env}
+      POSTGRES_DB: ${GAME_DB_NAME:-game_service}
+    volumes:
+      - game-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GAME_DB_USER:-game} -d ${GAME_DB_NAME:-game_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  game-service:
+    image: dimon1/game-service:0.1.0
+    # The release's start script ships without the executable bit, so the image's
+    # own CMD (/app/bin/server) exits with "permission denied". Invoking it through
+    # sh runs the same script and migrates and seeds exactly as it was meant to.
+    # Drop this line once the bit is fixed upstream.
+    command: ["sh", "/app/bin/server"]
+    depends_on:
+      game-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ecto://${GAME_DB_USER:-game}:${GAME_DB_PASSWORD}@game-db:5432/${GAME_DB_NAME:-game_service}
+      SECRET_KEY_BASE: ${GAME_SECRET_KEY_BASE:?set GAME_SECRET_KEY_BASE in .env}
+      PORT: 4002
+      PHX_HOST: localhost
+      PHX_SCHEME: http
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # game-service defaults this to true, which accepts unsigned requests and
+      # waves through the endpoints the contract marks internal. The whole team is
+      # in this compose file, so enforce real tokens here.
+      BYPASS_AUTH: ${GAME_BYPASS_AUTH:-false}
+    ports:
+      - "4002:4002"
+
   # ------------------------------------------------------------------- the rest
-  # Uncomment a block once that service has a public image on Docker Hub.
-  # Keep the shape above: own database, own volume, required secrets, distinct port.
-  #
-  # player-service:    port 4001   owner @DimonBel
-  # game-service:      port 4002   owner @DimonBel
+  # Every service in the contract is now in this file. Keep the shape above for
+  # anything new: own database, own volume, required secrets, distinct port.
   #
   # base-service and crafting-service ship with MOCK_MODE and stand in for exam-service /
   # world-service / player-service / resource-service until those are also live here — see
@@ -208,6 +286,8 @@ services:
   # stubs that only log, regardless of what else is running in this compose file.
 
 volumes:
+  player-pgdata:
+  game-pgdata:
   base-pgdata:
   crafting-pgdata:
   world-pgdata:
