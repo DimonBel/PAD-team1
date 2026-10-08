@@ -10,6 +10,10 @@
       "value": "http://localhost:8080"
     },
     {
+      "key": "serviceUrl",
+      "value": "http://localhost:4007"
+    },
+    {
       "key": "playerToken",
       "value": ""
     },
@@ -66,9 +70,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/health",
+              "raw": "{{serviceUrl}}/health",
               "host": [
-                "{{baseUrl}}"
+                "{{serviceUrl}}"
               ],
               "path": [
                 "health"
