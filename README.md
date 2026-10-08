@@ -53,8 +53,8 @@ world-service start empty, and their demo data is loaded separately (see
 
 | Service | Image | Owner |
 | --- | --- | --- |
-| base-service | [`cobili/base-service:2.0.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
-| crafting-service | [`cobili/crafting-service:2.0.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
+| base-service | [`cobili/base-service:2.0.1`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
+| crafting-service | [`cobili/crafting-service:2.0.1`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
 | player-service | [`dimon1/player-service:0.1.1`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
 | game-service | [`dimon1/game-service:0.1.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
@@ -62,7 +62,7 @@ world-service start empty, and their demo data is loaded separately (see
 | exam-service | [`alexandramihalevschi/exam-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
 | world-service | [`alexandramihalevschi/world-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 
-The tag is the service version, so `cobili/base-service:2.0.0` is version 2.0.0.
+The tag is the service version, so `cobili/base-service:2.0.1` is version 2.0.1.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
 
 Every service in the contract is now in `docker-compose.yaml`; there is nothing left to
