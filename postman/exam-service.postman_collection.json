@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "e5a2f2b0-9b1a-4b3e-8b7a-exam-service-1",
     "name": "Exam Service",
-    "description": "Covers courses, exams, the full exam-attempt lifecycle (start -> answer -> finalize/grade -> cancel) and academic-record wiring for the Exam Service (see cpr/PAD-team1/exam-service/README.md section 8 for the auth/role table this mirrors).\n\nThis collection mints its own JWTs via the collection-level pre-request script (HS256, signed with the same dev secrets as config/dev.exs), and every run generates fresh, non-colliding course/exam/player ids, so importing it and clicking \"Run\" is enough — no manual token-pasting or id edits needed.\n\nFolders 1-3 are safe to run automatically end-to-end. Folder 4 (the 410 expired-attempt case) is deliberately excluded from an automatic run — the attempt window is a real 10 minutes server-side, so it needs a manual wait; see its own description. The ExUnit suite already covers that case deterministically.\n\nIf your local dev secrets differ from the defaults (config/dev.exs's jwt_secret / service_jwt_secret), update the `jwt_secret` / `service_jwt_secret` collection variables before running.",
+    "description": "Covers courses, exams, the full exam-attempt lifecycle (start -> answer -> finalize/grade -> cancel) and academic-record wiring for the Exam Service (see cpr/PAD-team1/exam-service/README.md section 8 for the auth/role table this mirrors).\n\nEvery request goes through the API Gateway (`base_url`, default http://localhost:8080): since 2.0.0 the service only accepts requests the Gateway forwarded, so calling it directly gives 401. This collection mints its own JWTs via the collection-level pre-request script (HS256 with `exp`, signed with the Gateway's secrets), and every run generates fresh, non-colliding course/exam/player ids, so importing it and clicking \"Run\" is enough — no manual token-pasting or id edits needed.\n\nFolders 1-3 are safe to run automatically end-to-end. Folder 4 (the 410 expired-attempt case) is deliberately excluded from an automatic run — the attempt window is a real 10 minutes server-side, so it needs a manual wait; see its own description. The ExUnit suite already covers that case deterministically.\n\nBefore running, set the `jwt_secret` / `service_jwt_secret` collection variables to the `JWT_SECRET` / `SERVICE_JWT_SECRET` values from the team's `.env` (the ones the Gateway runs with), or pass them with newman's `--env-var`. The defaults are `change_me`, the placeholders in `.env.example`.\n\nTemporary, until the Gateway is in the team's docker-compose.yaml: to call the service directly, set `base_url` to the service (http://localhost:4005) and `gateway_secret` to `GATEWAY_SECRET` from `.env`; the pre-request script then adds the identity headers the Gateway would send. Leave `gateway_secret` empty to go through the Gateway.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -40,29 +40,57 @@
           "    return signingInput + \".\" + signature;",
           "}",
           "",
+          "// The Gateway verifies every token: HS256, signed with the Gateway's JWT_SECRET (player",
+          "// tokens) or SERVICE_JWT_SECRET (service tokens, sub \"service:<name>\"), and exp is required.",
+          "const now = Math.floor(Date.now() / 1000);",
           "const jwtSecret = pm.variables.get(\"jwt_secret\");",
           "const serviceSecret = pm.variables.get(\"service_jwt_secret\");",
           "",
           "pm.collectionVariables.set(",
           "    \"player_token\",",
-          "    signJWT({ sub: pm.collectionVariables.get(\"player_id\"), roles: [\"player\"] }, jwtSecret)",
+          "    signJWT({ sub: pm.collectionVariables.get(\"player_id\"), roles: [\"player\"], type: \"player\", iat: now, exp: now + 3600 }, jwtSecret)",
           ");",
           "pm.collectionVariables.set(",
           "    \"moderator_token\",",
-          "    signJWT({ sub: \"postman-mod-\" + runId, roles: [\"player\", \"moderator\"] }, jwtSecret)",
+          "    signJWT({ sub: \"postman-mod-\" + runId, roles: [\"player\", \"moderator\"], type: \"player\", iat: now, exp: now + 3600 }, jwtSecret)",
           ");",
           "pm.collectionVariables.set(",
           "    \"service_token\",",
-          "    signJWT({ roles: [\"service\"] }, serviceSecret)",
-          ");"
+          "    signJWT({ sub: \"service:game-service\", roles: [\"service\"], type: \"service\", iat: now, exp: now + 300 }, serviceSecret)",
+          ");",
+          "",
+          "// TEMPORARY, until the Gateway is in docker-compose.yaml: with `gateway_secret` set (the",
+          "// GATEWAY_SECRET from .env) and `base_url` pointing straight at the service, send the",
+          "// headers the Gateway would add, built from this request's own token. Leave `gateway_secret`",
+          "// empty to go through the Gateway.",
+          "const gatewaySecret = pm.variables.get(\"gateway_secret\");",
+          "if (gatewaySecret) {",
+          "    const bearer = pm.request.auth && pm.request.auth.type === \"bearer\"",
+          "        ? pm.variables.replaceIn(pm.request.auth.parameters().get(\"token\") || \"\")",
+          "        : \"\";",
+          "    pm.request.headers.upsert({ key: \"X-Gateway-Secret\", value: gatewaySecret });",
+          "    ([\"X-Player-Id\", \"X-Roles\", \"X-Service-Name\"]).forEach((key) => pm.request.headers.remove(key));",
+          "    if (bearer.split(\".\").length === 3) {",
+          "        let part = bearer.split(\".\")[1].replace(/-/g, \"+\").replace(/_/g, \"/\");",
+          "        while (part.length % 4) part += \"=\";",
+          "        const claims = JSON.parse(CryptoJS.enc.Utf8.stringify(CryptoJS.enc.Base64.parse(part)));",
+          "        const roles = claims.roles || [];",
+          "        pm.request.headers.upsert({ key: \"X-Roles\", value: roles.join(\",\") });",
+          "        if (roles.includes(\"service\")) {",
+          "            pm.request.headers.upsert({ key: \"X-Service-Name\", value: String(claims.sub).replace(/^service:/, \"\") });",
+          "        } else {",
+          "            pm.request.headers.upsert({ key: \"X-Player-Id\", value: claims.sub });",
+          "        }",
+          "    }",
+          "}"
         ]
       }
     }
   ],
   "variable": [
-    { "key": "base_url", "value": "http://localhost:4005", "type": "string" },
-    { "key": "jwt_secret", "value": "dev_only_jwt_secret_do_not_use_in_prod", "type": "string" },
-    { "key": "service_jwt_secret", "value": "dev_only_service_jwt_secret_do_not_use_in_prod", "type": "string" },
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "jwt_secret", "value": "change_me", "type": "string" },
+    { "key": "service_jwt_secret", "value": "change_me", "type": "string" },
     { "key": "run_id", "value": "", "type": "string" },
     { "key": "course_id", "value": "", "type": "string" },
     { "key": "player_id", "value": "", "type": "string" },
@@ -74,7 +102,8 @@
     { "key": "player_token", "value": "", "type": "string" },
     { "key": "moderator_token", "value": "", "type": "string" },
     { "key": "service_token", "value": "", "type": "string" },
-    { "key": "expired_attempt_id", "value": "", "type": "string" }
+    { "key": "expired_attempt_id", "value": "", "type": "string" },
+    { "key": "gateway_secret", "value": "", "type": "string" }
   ],
   "item": [
     {
