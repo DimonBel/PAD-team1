@@ -24,7 +24,7 @@ services:
       retries: 10
 
   base-service:
-    image: cobili/base-service:2.0.1
+    image: cobili/base-service:2.0.2
     depends_on:
       base-db:
         condition: service_healthy
@@ -55,7 +55,7 @@ services:
       retries: 10
 
   crafting-service:
-    image: cobili/crafting-service:2.0.1
+    image: cobili/crafting-service:2.0.2
     depends_on:
       crafting-db:
         condition: service_healthy
