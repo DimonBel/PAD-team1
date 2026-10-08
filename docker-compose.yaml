@@ -24,7 +24,7 @@ services:
       retries: 10
 
   base-service:
-    image: cobili/base-service:0.1.0
+    image: cobili/base-service:2.0.1
     depends_on:
       base-db:
         condition: service_healthy
@@ -33,10 +33,9 @@ services:
       PORT: 4007
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
       MOCK_MODE: ${MOCK_MODE:-true}
-      RESOURCE_SERVICE_URL: http://resource-service:4006
-      WORLD_SERVICE_URL: http://world-service:4004
-      PLAYER_SERVICE_URL: http://player-service:${PLAYER_PHX_PORT:-4000}
     ports:
       - "4007:4007"
 
@@ -56,7 +55,7 @@ services:
       retries: 10
 
   crafting-service:
-    image: cobili/crafting-service:0.1.0
+    image: cobili/crafting-service:2.0.1
     depends_on:
       crafting-db:
         condition: service_healthy
@@ -65,11 +64,9 @@ services:
       PORT: 4008
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
       MOCK_MODE: ${MOCK_MODE:-true}
-      RESOURCE_SERVICE_URL: http://resource-service:4006
-      PLAYER_SERVICE_URL: http://player-service:${PLAYER_PHX_PORT:-4000}
-      EXAM_SERVICE_URL: http://exam-service:4005
-      WORLD_SERVICE_URL: http://world-service:4004
     ports:
       - "4008:4008"
 
