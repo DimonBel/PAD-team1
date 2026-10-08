@@ -26,7 +26,15 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 ![Architectural Diagram](./docs/architecture.jpg)
 
-The architectural diagram (provided separately by the team) illustrates how the eight microservices interact through the API Gateway and Service Registry. The Game Service sits at the center of the live game loop, while Player, Resource, Exam, World, Zombie, Base and Crafting Services each own a distinct domain. Inter-service communication is a mix of synchronous REST, asynchronous events and WebSocket fan-out.
+The API Gateway is the single entry point to the platform. Clients never call a service directly: every request goes to the Gateway, which checks the caller's JWT and routes the request by its path to the service that owns it. Service-to-service calls take the same route. When Exam Service tells Player Service to award XP, for example, it calls the Gateway, and the Gateway forwards the request to Player Service. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database. The Game Service sits at the center of the live game loop.
+
+| Connection | Protocol |
+| --- | --- |
+| Client → Gateway → service (every `/api/...` route) | REST over HTTP |
+| Service → Gateway → service (e.g. Exam → Player, World → Resource, Zombie → World) | REST over HTTP, with a service-to-service JWT |
+| Client ↔ Gateway ↔ Game Service (`/ws/game/lobbies/{lobby_id}`) | WebSocket, negotiated at the Gateway and proxied to the Game Service |
+
+The WebSocket carries live game events, such as action progress, zombie attacks and day/night changes (see [WebSocket Connection](#websocket-connection)). Everything else is REST.
 
 ***
 
