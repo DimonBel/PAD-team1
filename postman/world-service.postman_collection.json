@@ -11,11 +11,14 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Stable per-run identifiers: generated once per collection run, reused by every",
-          "// request within that run, so re-running the whole collection never collides with",
-          "// data from a previous run.",
-          "if (!pm.collectionVariables.get(\"run_id\")) {",
+          "// A run starts at the collection's first request (Create Map (bootstrap with seed zone)): it gets a fresh",
+          "// run_id and forgets the ids the previous run created, because the Postman app keeps",
+          "// collection variables between runs. Every later request reuses them, so two runs in a",
+          "// row never collide (no 422 on re-created data, no progress carried over).",
+          "const RUN_SCOPED = [\"zone_id\", \"room_id\", \"node_id\", \"spawn_id\", \"unlock_zone_id\", \"unlock_rooms\"];",
+          "if (pm.info.requestName === \"Create Map (bootstrap with seed zone)\" || !pm.collectionVariables.get(\"run_id\")) {",
           "    pm.collectionVariables.set(\"run_id\", Date.now().toString());",
+          "    RUN_SCOPED.forEach((key) => pm.collectionVariables.set(key, \"\"));",
           "}",
           "const runId = pm.collectionVariables.get(\"run_id\");",
           "pm.collectionVariables.set(\"course_id\", runId + \"-postman-course\");",
