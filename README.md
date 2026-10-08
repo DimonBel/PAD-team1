@@ -67,8 +67,8 @@ world-service start empty, and their demo data is loaded separately (see
 | game-service | [`dimon1/game-service:0.1.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
-| exam-service | [`alexandramihalevschi/exam-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
-| world-service | [`alexandramihalevschi/world-service:0.1.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| exam-service | [`alexandramihalevschi/exam-service:2.0.1`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
+| world-service | [`alexandramihalevschi/world-service:2.0.1`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 
 The tag is the service version, so `cobili/base-service:2.0.1` is version 2.0.1.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
@@ -83,21 +83,22 @@ uncomment.
 | base-service, crafting-service | `*_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They no longer read `Authorization`: the gateway validates the token and they authorize from `X-Gateway-Secret` plus `X-Player-Id` / `X-Roles` / `X-Service-Name`. Reach them through the gateway, not on 4007/4008. `MOCK_MODE` optional, defaults to `true`; `GATEWAY_URL` defaults to `http://gateway:8080` |
 | zombie-service | `ZOMBIE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | `MOCK_MODE` optional, defaults to `true`; also calls Player, Resource and World Services |
 | resource-service | `RESOURCE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Service-to-service JWT authentication |
-| exam-service, world-service | `*_DB_PASSWORD`, `*_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Phoenix releases: `SECRET_KEY_BASE` is required on top of the shared secrets. The image's own `CMD` doesn't migrate, so `docker-compose.yaml` runs `bin/migrate` before `bin/server` |
+| exam-service, world-service | `*_POSTGRES_PASSWORD`, `SECRET_KEY_BASE`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They don't verify JWTs: the API Gateway does, and forwards the caller as headers with `X-Gateway-Secret`, so a request without the right `GATEWAY_SECRET` gets `401`. Outbound calls go through the Gateway at `GATEWAY_URL` (default `http://gateway:8080`). The image migrates on start; no `command:` override is needed |
 | player-service | `PLAYER_DB_PASSWORD`, `PLAYER_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | It calls the shared service secret `INTERNAL_JWT_SECRET`, so `docker-compose.yaml` maps `SERVICE_JWT_SECRET` onto it — every service still signs the same tokens. Its entrypoint waits on Postgres and migrates before starting, so it also needs `POSTGRES_HOST` and the credentials as separate variables |
 | game-service | `GAME_DB_PASSWORD`, `GAME_SECRET_KEY_BASE`, `JWT_SECRET` | Has no service secret of its own: it checks for a `service` role in a token signed with `JWT_SECRET`. `GAME_BYPASS_AUTH` defaults to `false` here — the service's own default is `true`, which accepts unsigned requests. Its release start script ships without the executable bit, so `docker-compose.yaml` runs it as `sh /app/bin/server` |
 
 #### Building exam-service / world-service from source
 
-Each lives in its own private repository, linked here as a git submodule. With access to it:
+Each lives in its own private repository, linked here as a git submodule. Their CI publishes
+`<version>` and `latest` (linux/amd64 and linux/arm64) on every merge to `main`, so nobody
+pushes by hand. To build one locally, with access to it:
 
 ```bash
 cd exam-service                       # or world-service
 docker build -t alexandramihalevschi/exam-service:<version> .
-docker push alexandramihalevschi/exam-service:<version>
 ```
 
-Then bump the tag in `docker-compose.yaml` and in the table above. Each repository also
+After a release, bump the tag in `docker-compose.yaml` and in the table above. Each repository also
 has its own `docker-compose.yml` (app + Postgres), which builds from source for running
 that service alone. See its README.
 
@@ -140,13 +141,19 @@ game-service reports whether auth enforcement is on, which is worth checking aft
 {"status":"ok","version":"0.1.0","service":"game-service","database":"up","auth_bypass":false,"running_sessions":0}
 ```
 
-exam-service and world-service have no `/health` endpoint yet. Any API route confirms
-they're up: without a token it returns `401`, which means the app is serving requests.
+exam-service and world-service answer `GET /health` too, with their database status:
 
 ```bash
-curl -i http://localhost:4005/api/exams          # exam-service  -> 401
-curl -i http://localhost:4004/api/world/zones    # world-service -> 401
+curl http://localhost:4005/health  # exam-service
+curl http://localhost:4004/health  # world-service
 ```
+
+```json
+{"status":"ok","version":"2.0.1","service":"exam-service","database":"up"}
+```
+
+Their API routes answer `401` when called directly, because they only accept requests that
+came through the API Gateway (see [What each image needs](#what-each-image-needs)).
 
 ### Running before the whole team is up
 
@@ -163,9 +170,10 @@ base-service, crafting-service and zombie-service ship with `MOCK_MODE`. While i
 built-in stand-ins for the services they depend on, so they run and can be tested on
 their own. Set it to `false` once the real services are in the compose file.
 
-exam-service and world-service have no toggle. Every outbound call they make is a stub
-behind an `ExternalClients` module that logs the request it would send, in the
-contract's payload shape, instead of sending it:
+exam-service and world-service have no toggle. Every outbound call they make is a real
+request through the API Gateway (`GATEWAY_URL`), signed with a service token. Until the
+Gateway is in this compose file the calls fail; the failure is logged and never undoes the
+change that triggered it (a graded exam stays graded):
 
 | From | To | Call |
 | --- | --- | --- |
@@ -175,8 +183,7 @@ contract's payload shape, instead of sending it:
 | world-service | Resource Service | `POST /api/resources/points` |
 | world-service | Crafting Service | `POST /api/crafting/players/{player_id}/unlocks` |
 
-Watch them with `docker compose logs -f exam-service world-service`. The lines are
-prefixed `[stub PlayerService]`, `[stub WorldService]` and so on.
+Watch them with `docker compose logs -f exam-service world-service`.
 
 ### Testing
 
