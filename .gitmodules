@@ -22,3 +22,6 @@
 [submodule "exam-service"]
 	path = exam-service
 	url = https://github.com/danganhuh/exam-service
+[submodule "Gateway-team1"]
+	path = Gateway-team1
+	url = https://github.com/DimonBel/Gateway-team1.git
