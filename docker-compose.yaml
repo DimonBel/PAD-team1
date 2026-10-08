@@ -88,11 +88,8 @@ services:
       retries: 10
 
   world-service:
-    image: alexandramihalevschi/world-service:0.2.0
-    command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
-    platform: linux/amd64 # no arm64 manifest published yet — required on Apple Silicon
-    tty: true # OTP release needs a pty for its user/console process or the VM crashes with "nouser"
-    stdin_open: true
+    # Migrates on start, published for linux/amd64 and linux/arm64.
+    image: alexandramihalevschi/world-service:2.0.1
     depends_on:
       world-db:
         condition: service_healthy
@@ -100,11 +97,13 @@ services:
       DATABASE_URL: ecto://${WORLD_POSTGRES_USER:-world_service}:${WORLD_POSTGRES_PASSWORD}@world-db:5432/${WORLD_POSTGRES_DB:-world_service_dev}
       PORT: ${WORLD_PHX_PORT:-4004}
       PHX_HOST: ${PHX_HOST:-localhost}
-      PHX_SCHEME: ${PHX_SCHEME:-http}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE in .env}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Signs the service's own outbound tokens.
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
-      JWT_TTL_MIN: ${JWT_TTL_MIN:-60}
+      # The API Gateway sends it as X-Gateway-Secret; a request without it gets 401.
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      # Outbound calls to the other services go through the Gateway.
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
     ports:
       - "${WORLD_HOST_PORT:-4004}:${WORLD_PHX_PORT:-4004}"
 
@@ -126,11 +125,8 @@ services:
       retries: 10
 
   exam-service:
-    image: alexandramihalevschi/exam-service:0.2.0
-    command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
-    platform: linux/amd64 # same publisher/build as world-service — likely amd64-only too
-    tty: true # OTP release needs a pty for its user/console process or the VM crashes with "nouser"
-    stdin_open: true
+    # Migrates on start, published for linux/amd64 and linux/arm64.
+    image: alexandramihalevschi/exam-service:2.0.1
     depends_on:
       exam-db:
         condition: service_healthy
@@ -138,11 +134,13 @@ services:
       DATABASE_URL: ecto://${EXAM_POSTGRES_USER:-exam_service}:${EXAM_POSTGRES_PASSWORD}@exam-db:5432/${EXAM_POSTGRES_DB:-exam_service_dev}
       PORT: ${EXAM_PHX_PORT:-4005}
       PHX_HOST: ${PHX_HOST:-localhost}
-      PHX_SCHEME: ${PHX_SCHEME:-http}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE in .env}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Signs the service's own outbound tokens.
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env}
-      JWT_TTL_MIN: ${JWT_TTL_MIN:-60}
+      # The API Gateway sends it as X-Gateway-Secret; a request without it gets 401.
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      # Outbound calls to the other services go through the Gateway.
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
     ports:
       - "${EXAM_HOST_PORT:-4005}:${EXAM_PHX_PORT:-4005}"
 
@@ -284,7 +282,8 @@ services:
 
   # All 8 services are here. base/crafting/zombie run with MOCK_MODE=true and game with
   # BYPASS_AUTH=true while the cross-service wiring isn't finished. exam-service and
-  # world-service have no toggle: their outbound calls are stubs that only log.
+  # world-service have no toggle: their outbound calls are real requests to the API Gateway
+  # (GATEWAY_URL), which isn't in this file yet, so for now they fail and are only logged.
 
 volumes:
   base-pgdata:

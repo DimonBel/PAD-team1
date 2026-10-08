@@ -9,10 +9,10 @@ headless with [Newman](https://github.com/postmanlabs/newman).
 | `crafting-service.postman_collection.json` | crafting-service | `http://localhost:4008` |
 | `zombie-service.postman_collection.json` | zombie-service | `http://localhost:4003` |
 | `resource-service.postman_collection.json` | resource-service | `http://localhost:4006` |
-| `exam-service.postman_collection.json` | exam-service | `http://localhost:4005` (collection variable is `base_url`) |
+| `exam-service.postman_collection.json` | exam-service | `http://localhost:8080`, the API Gateway (collection variable is `base_url`) |
 | `player-service.postman_collection.json` | player-service | `http://localhost:4001` (collection variable is `base_url`) |
 | `game-service.postman_collection.json` | game-service | `http://localhost:4002` (collection variable is `baseUrl`) |
-| `world-service.postman_collection.json` | world-service | `http://localhost:4004` (collection variable is `base_url`) |
+| `world-service.postman_collection.json` | world-service | `http://localhost:8080`, the API Gateway (collection variable is `base_url`) |
 
 ## Before you run anything
 
@@ -63,16 +63,34 @@ the shared stack, because the real Player Service is in it — so against that s
 put a real player JWT in `token` and a real service JWT in `serviceToken`, or every request
 comes back 401.
 
-**exam-service / world-service** — nothing to mint by hand. Each request self-signs its own
-JWT in a pre-request script (bundled `CryptoJS`, HS256, signed with the same dev secrets the
-service itself uses), stored in the collection variables `player_token` / `moderator_token` /
-`service_token`. Just import and run — no token-pasting step.
+**exam-service / world-service** — nothing to mint by hand, but the Gateway must be running.
+Since 2.0.0 both services only accept requests the API Gateway forwarded (a direct call gets
+`401`), so `base_url` defaults to the Gateway, `http://localhost:8080`. The collection-level
+pre-request script signs its own JWTs the way the Gateway checks them (bundled `CryptoJS`,
+HS256 with `exp`; player tokens with `jwt_secret`, service tokens with `service_jwt_secret`
+and `sub: "service:<name>"`), stored in `player_token` / `moderator_token` / `service_token`.
+
+- `jwt_secret` / `service_jwt_secret` must equal the `JWT_SECRET` / `SERVICE_JWT_SECRET` the
+  Gateway runs with, i.e. the root `.env`. They default to `change_me`, the `.env.example`
+  placeholders. A wrong value gives `401 {"error":"UNAUTHORIZED"}` from the Gateway.
+- **Temporary, until the Gateway is in `docker-compose.yaml`:** to call a service directly, set
+  `base_url` to it (`http://localhost:4005` / `http://localhost:4004`) and `gateway_secret` to
+  `GATEWAY_SECRET` from `.env`. The pre-request script then adds the headers the Gateway would
+  send (`X-Gateway-Secret`, `X-Player-Id`, `X-Roles`, `X-Service-Name`). Leave `gateway_secret`
+  empty to go through the Gateway; in direct mode the `jwt_secret`s don't matter.
 
 ## Running in Postman
 
 Open the Collection Runner and run the folders top to bottom. They are numbered
 because later requests depend on earlier ones: creating a base stores `baseId`
 into a collection variable, building a facility stores `facilityId`, and so on.
+
+**exam-service / world-service** can be run again and again, in the app too: the first request
+of a run (`Create Course` / `Create Map`) picks a fresh `run_id` and clears the ids the previous
+run left in the collection variables, so a second run never hits a 422 on re-created data or
+a stale `diploma_progress`. exam-service's folder 4 (the 410 expired-attempt case) is manual:
+its request is skipped unless you set `expired_attempt_id` (see the folder description), so a
+normal run reports 0 failures.
 
 `event_id` uses Postman's `{{$guid}}`, so every run sends a fresh value. These
 services are idempotent by `event_id`, so a fixed one would replay the first
@@ -90,18 +108,17 @@ newman run postman/zombie-service.postman_collection.json \
 newman run postman/resource-service.postman_collection.json \
   --env-var serviceToken="$SERVICE_TOKEN"
 
-# exam-service / world-service don't need --env-var tokens (see above). Against the shared
-# compose stack, pass the base_url plus the same JWT secrets you put in the root .env — the
-# collections default to each service's local dev secrets otherwise, and every request
-# would come back 401:
+# exam-service / world-service don't need --env-var tokens (see above). Through the Gateway
+# (default base_url http://localhost:8080), pass the JWT secrets from the root .env:
 newman run postman/exam-service.postman_collection.json \
-  --env-var base_url=http://localhost:4005 \
   --env-var jwt_secret="$JWT_SECRET" \
   --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
 newman run postman/world-service.postman_collection.json \
-  --env-var base_url=http://localhost:4004 \
   --env-var jwt_secret="$JWT_SECRET" \
   --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
+# Temporary, without a Gateway: straight at the service, with the Gateway secret
+newman run postman/exam-service.postman_collection.json \
+  --env-var base_url=http://localhost:4005 --env-var gateway_secret="$GATEWAY_SECRET"
 
 newman run postman/player-service.postman_collection.json \
   --env-var base_url=http://localhost:4001 \
@@ -123,8 +140,8 @@ Last run against a freshly migrated and seeded database:
 | --- | --- | --- | --- |
 | base-service | 35 | 36 | 0 |
 | crafting-service | 24 | 25 | 0 |
-| exam-service | 27 | 44 | 1 (`Reference — Manual Only`, needs a hand-seeded expired attempt — not a real failure) |
-| world-service | 25 | 46 | 0 |
+| exam-service | 26 | 43 | 0 (2.0.1 through the Gateway, two runs in a row; folder 4 skipped) |
+| world-service | 25 | 46 | 0 (2.0.1 through the Gateway, two runs in a row) |
 | player-service | not run yet | | |
 | game-service | not run yet | | |
 
