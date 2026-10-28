@@ -132,9 +132,11 @@ services:
       retries: 10
 
   world-service:
-    # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/world-service:2.0.1
+    # Migrates on start (safe when the replicas start together), published for linux/amd64
+    # and linux/arm64.
+    image: alexandramihalevschi/world-service:3.0.0
     pull_policy: always
+    restart: unless-stopped
     depends_on:
       world-db:
         condition: service_healthy
@@ -153,8 +155,10 @@ services:
 
       # Outbound calls to the other services go through the Gateway.
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
-    ports:
-      - "${WORLD_HOST_PORT:-4004}:${WORLD_PHX_PORT:-4004}"
+    # No host port: two replicas can't both publish 4004, and every call comes through the
+    # gateway anyway. Health: docker compose exec gateway wget -qO- http://world-service:4004/health
+    deploy:
+      replicas: ${WORLD_REPLICAS:-2}
 
   # ---------------------------------------------------------------- exam-service
 
@@ -180,9 +184,11 @@ services:
       retries: 10
 
   exam-service:
-    # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/exam-service:2.0.1
+    # Migrates on start (safe when the replicas start together), published for linux/amd64
+    # and linux/arm64.
+    image: alexandramihalevschi/exam-service:3.0.0
     pull_policy: always
+    restart: unless-stopped
     depends_on:
       exam-db:
         condition: service_healthy
@@ -201,8 +207,10 @@ services:
 
       # Outbound calls to the other services go through the Gateway.
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
-    ports:
-      - "${EXAM_HOST_PORT:-4005}:${EXAM_PHX_PORT:-4005}"
+    # No host port: two replicas can't both publish 4005, and every call comes through the
+    # gateway anyway. Health: docker compose exec gateway wget -qO- http://exam-service:4005/health
+    deploy:
+      replicas: ${EXAM_REPLICAS:-2}
 
   # ----------------------------------------------------------------- zombie-service
 
@@ -413,8 +421,8 @@ services:
   #
   # exam-service and world-service don't have a MOCK_MODE toggle of their own:
   # their outbound calls (Player/World/Crafting Service from exam-service;
-  # Resource/Crafting Service from world-service) are unconditional stubs
-  # that only log, regardless of what else is running in this compose file.
+  # Resource/Crafting Service from world-service) are real requests through the
+  # gateway; one that fails is logged and doesn't fail the request that caused it.
 
   gateway:
     image: ${GATEWAY_IMAGE:-dimon1/gateway:latest}
@@ -434,8 +442,6 @@ services:
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
       PLAYER_SERVICE_URL: ${PLAYER_SERVICE_URL:-http://host.docker.internal:4001}
       GAME_SERVICE_URL: ${GAME_SERVICE_URL:-http://host.docker.internal:4002}
-      EXAM_SERVICE_URL: ${EXAM_SERVICE_URL:-http://host.docker.internal:4005}
-      WORLD_SERVICE_URL: ${WORLD_SERVICE_URL:-http://host.docker.internal:4004}
       ZOMBIE_SERVICE_URL: ${ZOMBIE_SERVICE_URL:-http://host.docker.internal:4003}
       RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://host.docker.internal:4006}
       # By service name, the replicas have no host port. The gateway keeps its connection
@@ -443,6 +449,8 @@ services:
       # round-robins (Gateway-team1#19).
       BASE_SERVICE_URL: ${BASE_SERVICE_URL:-http://base-service:4007}
       CRAFTING_SERVICE_URL: ${CRAFTING_SERVICE_URL:-http://crafting-service:4008}
+      EXAM_SERVICE_URL: ${EXAM_SERVICE_URL:-http://exam-service:4005}
+      WORLD_SERVICE_URL: ${WORLD_SERVICE_URL:-http://world-service:4004}
       # What a CLIENT uses to reach each service's WebSocket directly (the gateway only negotiates).
       PLAYER_SERVICE_WS_URL: ${PLAYER_SERVICE_WS_URL:-ws://localhost:4001}
       GAME_SERVICE_WS_URL: ${GAME_SERVICE_WS_URL:-ws://localhost:4002}
