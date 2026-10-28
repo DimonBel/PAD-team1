@@ -67,8 +67,8 @@ world-service start empty, and their demo data is loaded separately (see
 | game-service | [`dimon1/game-service:0.1.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
-| exam-service | [`alexandramihalevschi/exam-service:2.0.1`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
-| world-service | [`alexandramihalevschi/world-service:2.0.1`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| exam-service | [`alexandramihalevschi/exam-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
+| world-service | [`alexandramihalevschi/world-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 
 The tag is the service version, so `cobili/base-service:3.0.0` is version 3.0.0.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
@@ -83,7 +83,7 @@ uncomment.
 | base-service, crafting-service | `*_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They no longer read `Authorization`: the gateway validates the token and they authorize from `X-Gateway-Secret` plus `X-Player-Id` / `X-Roles` / `X-Service-Name`. Reach them through the gateway, they publish no host port. Two replicas each (`BASE_REPLICAS`, `CRAFTING_REPLICAS`). `BASE_MOCK_MODE` / `CRAFTING_MOCK_MODE` default to `false` here, since mock state is per replica; `GATEWAY_URL` defaults to `http://gateway:8080`; `SERVICE_DISCOVERY_URL` and `DISCOVERY_SECRET` for registration |
 | zombie-service | `ZOMBIE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | `MOCK_MODE` optional, defaults to `true`; also calls Player, Resource and World Services |
 | resource-service | `RESOURCE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Service-to-service JWT authentication |
-| exam-service, world-service | `*_POSTGRES_PASSWORD`, `SECRET_KEY_BASE`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They don't verify JWTs: the API Gateway does, and forwards the caller as headers with `X-Gateway-Secret`, so a request without the right `GATEWAY_SECRET` gets `401`. Outbound calls go through the Gateway at `GATEWAY_URL` (default `http://gateway:8080`). The image migrates on start; no `command:` override is needed |
+| exam-service, world-service | `EXAM_DB_PASSWORD` / `WORLD_DB_PASSWORD`, `EXAM_SECRET_KEY_BASE` / `WORLD_SECRET_KEY_BASE`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They don't verify JWTs: the API Gateway does, and forwards the caller as headers with `X-Gateway-Secret`, so a request without the right `GATEWAY_SECRET` gets `401`. Reach them through the gateway, they publish no host port. Two replicas each (`EXAM_REPLICAS`, `WORLD_REPLICAS`), restarted if they crash. Outbound calls go through the Gateway at `GATEWAY_URL` (default `http://gateway:8080`). The image migrates on start, safely when the replicas start together; no `command:` override is needed |
 | player-service | `PLAYER_DB_PASSWORD`, `PLAYER_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | It calls the shared service secret `INTERNAL_JWT_SECRET`, so `docker-compose.yaml` maps `SERVICE_JWT_SECRET` onto it — every service still signs the same tokens. Its entrypoint waits on Postgres and migrates before starting, so it also needs `POSTGRES_HOST` and the credentials as separate variables |
 | game-service | `GAME_DB_PASSWORD`, `GAME_SECRET_KEY_BASE`, `JWT_SECRET` | Has no service secret of its own: it checks for a `service` role in a token signed with `JWT_SECRET`. `GAME_BYPASS_AUTH` defaults to `false` here — the service's own default is `true`, which accepts unsigned requests. Its release start script ships without the executable bit, so `docker-compose.yaml` runs it as `sh /app/bin/server` |
 
@@ -109,8 +109,8 @@ that service alone. See its README.
 | player-service | 4001 |
 | game-service | 4002 |
 | zombie-service | 4003 |
-| world-service | 4004 |
-| exam-service | 4005 |
+| world-service | 4004, inside the network only (2 replicas) |
+| exam-service | 4005, inside the network only (2 replicas) |
 | resource-service | 4006 |
 | base-service | 4007, inside the network only (2 replicas) |
 | crafting-service | 4008, inside the network only (2 replicas) |
@@ -154,16 +154,21 @@ game-service reports whether auth enforcement is on, which is worth checking aft
 {"status":"ok","version":"0.1.0","service":"game-service","database":"up","auth_bypass":false,"running_sessions":0}
 ```
 
-exam-service and world-service answer `GET /health` too, with their database status:
+exam-service and world-service answer `GET /health` too, with their database status. They run as
+two replicas each and publish no host port, so ask from the gateway's container, which has
+`wget`; the service name answers from one of the replicas:
 
 ```bash
-curl http://localhost:4005/health  # exam-service
-curl http://localhost:4004/health  # world-service
+docker compose exec gateway wget -qO- http://exam-service:4005/health   # exam-service
+docker compose exec gateway wget -qO- http://world-service:4004/health  # world-service
 ```
 
 ```json
-{"status":"ok","version":"2.0.1","service":"exam-service","database":"up"}
+{"status":"ok","version":"3.0.0","service":"exam-service","database":"up","instance_id":"606dbe47aa60","memory_mb":108.8,"in_flight":0,"max_concurrent":50,"uptime_s":42}
 ```
+
+`instance_id` is the replica's container id, and `in_flight`, `max_concurrent` and `memory_mb`
+are its load figures, the same as base-service's and crafting-service's.
 
 Their API routes answer `401` when called directly, because they only accept requests that
 came through the API Gateway (see [What each image needs](#what-each-image-needs)).
