@@ -80,7 +80,7 @@ uncomment.
 
 | Service | Required env (from `.env`) | Notes |
 | --- | --- | --- |
-| base-service, crafting-service | `*_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They no longer read `Authorization`: the gateway validates the token and they authorize from `X-Gateway-Secret` plus `X-Player-Id` / `X-Roles` / `X-Service-Name`. Reach them through the gateway, not on 4007/4008. `MOCK_MODE` optional, defaults to `true`; `GATEWAY_URL` defaults to `http://gateway:8080` |
+| base-service, crafting-service | `*_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They no longer read `Authorization`: the gateway validates the token and they authorize from `X-Gateway-Secret` plus `X-Player-Id` / `X-Roles` / `X-Service-Name`. Reach them through the gateway, they publish no host port. Two replicas each (`BASE_REPLICAS`, `CRAFTING_REPLICAS`). `BASE_MOCK_MODE` / `CRAFTING_MOCK_MODE` default to `false` here, since mock state is per replica; `GATEWAY_URL` defaults to `http://gateway:8080`; `SERVICE_DISCOVERY_URL` and `DISCOVERY_SECRET` for registration |
 | zombie-service | `ZOMBIE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | `MOCK_MODE` optional, defaults to `true`; also calls Player, Resource and World Services |
 | resource-service | `RESOURCE_DB_PASSWORD`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | Service-to-service JWT authentication |
 | exam-service, world-service | `*_POSTGRES_PASSWORD`, `SECRET_KEY_BASE`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They don't verify JWTs: the API Gateway does, and forwards the caller as headers with `X-Gateway-Secret`, so a request without the right `GATEWAY_SECRET` gets `401`. Outbound calls go through the Gateway at `GATEWAY_URL` (default `http://gateway:8080`). The image migrates on start; no `command:` override is needed |
@@ -112,14 +112,17 @@ that service alone. See its README.
 | world-service | 4004 |
 | exam-service | 4005 |
 | resource-service | 4006 |
-| base-service | 4007 |
-| crafting-service | 4008 |
+| base-service | 4007, inside the network only (2 replicas) |
+| crafting-service | 4008, inside the network only (2 replicas) |
 
 base-service, crafting-service, zombie-service, resource-service and game-service answer
-`GET /health`; player-service answers `GET /api/health`:
+`GET /health`; player-service answers `GET /api/health`.
+
+base-service and crafting-service run as two replicas each and publish no host port, so ask a
+replica from inside its container (`--index 2` for the second one):
 
 ```bash
-curl http://localhost:4007/health
+docker compose exec base-service curl -s localhost:4007/health
 ```
 
 ```json
@@ -129,6 +132,12 @@ curl http://localhost:4007/health
 From `3.0.0`, base-service and crafting-service also answer `GET /status` with the same body.
 `in_flight`, `max_concurrent` and `memory_mb` are the load figures Service Discovery reads,
 and `instance` says which replica answered.
+
+Each replica registers itself with Service Discovery (`SERVICE_DISCOVERY_URL`, default
+`http://service-discovery:8500`, with `DISCOVERY_SECRET`) and deregisters on `docker compose stop`.
+Until Service Discovery is in this compose file they log `service discovery registration failed,
+retrying` and work as before. The gateway reaches them by service name; spreading requests across
+the replicas comes with its round-robin over Service Discovery (Gateway-team1#19).
 
 The other Ruby services use their own ports:
 
@@ -174,6 +183,10 @@ base-service, crafting-service and zombie-service ship with `MOCK_MODE`. While i
 built-in stand-ins for the services they depend on, so they run and can be tested on
 their own. Set it to `false` once the real services are in the compose file.
 
+base-service and crafting-service already run with it off here (`BASE_MOCK_MODE`,
+`CRAFTING_MOCK_MODE`): they run as replicas, and the stand-ins keep their stock and inventory in
+each process, so two replicas would disagree.
+
 exam-service and world-service have no toggle. Every outbound call they make is a real
 request through the API Gateway (`GATEWAY_URL`), signed with a service token. Until the
 Gateway is in this compose file the calls fail; the failure is logged and never undoes the
@@ -200,6 +213,17 @@ newman run postman/zombie-service.postman_collection.json \
   --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
 newman run postman/resource-service.postman_collection.json \
   --env-var serviceToken="$SERVICE_TOKEN"
+```
+
+base-service and crafting-service publish no host port, so their `00 Health` request can't reach
+`localhost:4007` / `4008`. Run Newman inside the compose network instead (the network is
+`<folder>_default`, here `pad-team1_default`):
+
+```bash
+docker run --rm --network pad-team1_default -v "$PWD/postman:/etc/newman" postman/newman:6-alpine \
+  run base-service.postman_collection.json \
+  --env-var baseUrl=http://gateway:8080 --env-var serviceUrl=http://base-service:4007 \
+  --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
 ```
 
 Tokens come from the service itself:

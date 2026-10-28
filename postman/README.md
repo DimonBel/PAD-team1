@@ -5,8 +5,8 @@ headless with [Newman](https://github.com/postmanlabs/newman).
 
 | Collection | Service | Default `baseUrl` |
 | --- | --- | --- |
-| `base-service.postman_collection.json` | base-service | `http://localhost:4007` |
-| `crafting-service.postman_collection.json` | crafting-service | `http://localhost:4008` |
+| `base-service.postman_collection.json` | base-service | `http://localhost:8080`, the API Gateway; `serviceUrl` for `00 Health` |
+| `crafting-service.postman_collection.json` | crafting-service | `http://localhost:8080`, the API Gateway; `serviceUrl` for `00 Health` |
 | `zombie-service.postman_collection.json` | zombie-service | `http://localhost:4003` |
 | `resource-service.postman_collection.json` | resource-service | `http://localhost:4006` |
 | `exam-service.postman_collection.json` | exam-service | `http://localhost:8080`, the API Gateway (collection variable is `base_url`) |
@@ -24,6 +24,10 @@ docker compose exec app bundle exec rake token:service
 ```
 
 Paste them into the collection variables `playerToken` and `serviceToken`.
+
+Both run as replicas with no host port in the shared compose, so `00 Health` needs
+`serviceUrl` set to `http://base-service:4007` / `http://crafting-service:4008` and Newman
+running inside the compose network (see Testing in the root README).
 Public endpoints take the player token; the ones the contract marks `[internal]`
 take the service token, and a player token on those correctly returns 401.
 
