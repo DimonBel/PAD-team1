@@ -25,3 +25,6 @@
 [submodule "Gateway-team1"]
 	path = Gateway-team1
 	url = https://github.com/DimonBel/Gateway-team1.git
+[submodule "Service-Discovery-team1"]
+	path = Service-Discovery-team1
+	url = https://github.com/DimonBel/Service-Discovery-team1.git
