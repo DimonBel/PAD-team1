@@ -6,11 +6,46 @@
 #
 # Each service keeps its own Postgres and its own named volume, so no service can
 # read another one's tables. Ports are distinct so everything runs at once.
+#
+# Lab 3: every service registers itself with Service Discovery, and the gateway
+# round-robins over the instances it lists as up. zombie, resource, base,
+# crafting, world and exam run as replicas (*_REPLICAS, default 2) and publish
+# no host port: replicas can't share one, and every call comes through the
+# gateway anyway. player-service and game-service stay single and keep their
+# host ports, because clients open their WebSockets on them directly.
+# Check a replica's health from inside it, e.g.
+#   docker compose exec zombie-service ruby -rnet/http -e 'puts Net::HTTP.get(URI("http://localhost:4003/health"))'
 
 # Every service runs a published Docker Hub image (pull_policy: always): `docker compose up` pulls the
-# newest build of each tag and never builds anything locally. Use GATEWAY_IMAGE / PLAYER_IMAGE / GAME_IMAGE in .env
-# to pin another tag.
+# newest build of each tag and never builds anything locally. Use GATEWAY_IMAGE / SERVICE_DISCOVERY_IMAGE /
+# PLAYER_IMAGE / GAME_IMAGE in .env to pin another tag.
 services:
+  # ----------------------------------------------------------- service-discovery
+  service-discovery:
+    image: ${SERVICE_DISCOVERY_IMAGE:-dimon1/service-discovery:3.1.5-amd64}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      PORT: "8500"
+      # debug also logs a summary of every health sweep.
+      LOG_LEVEL: ${SD_LOG_LEVEL:-info}
+      # Empty: registration is open. Set it to require X-Discovery-Key on writes;
+      # every service below sends the same value.
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+      HEALTH_CHECK_INTERVAL_MS: ${HEALTH_CHECK_INTERVAL_MS:-10000}
+      # Health alerts (down / removed / recovered) go to this Discord webhook. Empty: alerts off.
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      ALERT_COOLDOWN_MS: ${ALERT_COOLDOWN_MS:-60000}
+      # Periodic all-services digest on the same webhook: 0 = off, otherwise every this many ms.
+      DIGEST_INTERVAL_MS: ${DIGEST_INTERVAL_MS:-0}
+    ports:
+      - "${SERVICE_DISCOVERY_HOST_PORT:-8500}:8500"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8500/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ---------------------------------------------------------------- base-service
   base-db:
     image: postgres:16-alpine
@@ -32,7 +67,7 @@ services:
       retries: 10
 
   base-service:
-    image: cobili/base-service:2.0.2
+    image: cobili/base-service:3.0.0
     pull_policy: always
     depends_on:
       base-db:
@@ -47,12 +82,16 @@ services:
       REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-10}
       MAX_CONCURRENT_REQUESTS: ${MAX_CONCURRENT_REQUESTS:-8}
       DB_POOL: ${DB_POOL:-16}
-      MOCK_MODE: ${MOCK_MODE:-true}
+      # Replicas share Postgres, but the mock stand-ins keep state per process, so they
+      # must call the real services. Its own variable: zombie-service still reads MOCK_MODE.
+      MOCK_MODE: ${BASE_MOCK_MODE:-false}
       # Sinatra defaults to development mode, which only accepts Host: localhost and answers
-      # "403 Host not permitted" to the gateway (it calls host.docker.internal:PORT).
+      # "403 Host not permitted" to the gateway, which calls it by container address.
       APP_ENV: production
-    ports:
-      - "4007:4007"
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+    deploy:
+      replicas: ${BASE_REPLICAS:-2}
 
   # ------------------------------------------------------------ crafting-service
   crafting-db:
@@ -75,7 +114,7 @@ services:
       retries: 10
 
   crafting-service:
-    image: cobili/crafting-service:2.0.2
+    image: cobili/crafting-service:3.0.0
     pull_policy: always
     depends_on:
       crafting-db:
@@ -90,10 +129,13 @@ services:
       REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-10}
       MAX_CONCURRENT_REQUESTS: ${MAX_CONCURRENT_REQUESTS:-8}
       DB_POOL: ${DB_POOL:-16}
-      MOCK_MODE: ${MOCK_MODE:-true}
+      # Same reason as base-service: replicas must not keep mock state of their own.
+      MOCK_MODE: ${CRAFTING_MOCK_MODE:-false}
       APP_ENV: production
-    ports:
-      - "4008:4008"
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+    deploy:
+      replicas: ${CRAFTING_REPLICAS:-2}
   # --------------------------------------------------------------- world-service
 
   world-db:
@@ -119,7 +161,7 @@ services:
 
   world-service:
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/world-service:2.0.1
+    image: alexandramihalevschi/world-service:3.0.0
     pull_policy: always
     depends_on:
       world-db:
@@ -139,8 +181,10 @@ services:
 
       # Outbound calls to the other services go through the Gateway.
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
-    ports:
-      - "${WORLD_HOST_PORT:-4004}:${WORLD_PHX_PORT:-4004}"
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+    deploy:
+      replicas: ${WORLD_REPLICAS:-2}
 
   # ---------------------------------------------------------------- exam-service
 
@@ -167,7 +211,7 @@ services:
 
   exam-service:
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/exam-service:2.0.1
+    image: alexandramihalevschi/exam-service:3.0.0
     pull_policy: always
     depends_on:
       exam-db:
@@ -187,8 +231,10 @@ services:
 
       # Outbound calls to the other services go through the Gateway.
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
-    ports:
-      - "${EXAM_HOST_PORT:-4005}:${EXAM_PHX_PORT:-4005}"
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+    deploy:
+      replicas: ${EXAM_REPLICAS:-2}
 
   # ----------------------------------------------------------------- zombie-service
 
@@ -215,7 +261,7 @@ services:
       retries: 10
 
   zombie-service:
-    image: tukaram40k/zombie-service:2.0.1
+    image: tukaram40k/zombie-service:3.0.0
     pull_policy: always
     depends_on:
       zombie-db:
@@ -226,12 +272,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      # The mock stand-ins keep no state, so replicas agree with them on.
       MOCK_MODE: ${MOCK_MODE:-true}
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
       TASK_TIMEOUT_SECONDS: ${TASK_TIMEOUT_SECONDS:-10}
       MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS:-50}
-    ports:
-      - "${ZOMBIE_API_PORT:-4003}:4003"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+    deploy:
+      replicas: ${ZOMBIE_REPLICAS:-2}
 
   # ----------------------------------------------------------------- resource-service
 
@@ -257,7 +307,7 @@ services:
       retries: 10
 
   resource-service:
-    image: tukaram40k/resource-service:2.0.1
+    image: tukaram40k/resource-service:3.0.0
     pull_policy: always
     depends_on:
       resource-db:
@@ -270,8 +320,11 @@ services:
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
       TASK_TIMEOUT_SECONDS: ${TASK_TIMEOUT_SECONDS:-10}
       MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS:-50}
-    ports:
-      - "${RESOURCE_API_PORT:-4006}:4006"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+    deploy:
+      replicas: ${RESOURCE_REPLICAS:-2}
 
   # ---------------------------------------------------------------- player-service
 
@@ -295,7 +348,7 @@ services:
       retries: 10
 
   player-service:
-    image: ${PLAYER_IMAGE:-dimon1/player-service:latest}
+    image: ${PLAYER_IMAGE:-dimon1/player-service:3.2.2}
     pull_policy: always
     depends_on:
       player-db:
@@ -314,9 +367,12 @@ services:
       PHX_HOST: localhost
       PHX_PORT: 4001
       SECRET_KEY_BASE: ${PLAYER_SECRET_KEY_BASE:?set PLAYER_SECRET_KEY_BASE in .env}
-      # player-service holds no token secret: the gateway validates the JWT, signs it at login,
-      # and tells the service who is calling (X-Player-Id / X-Roles / X-Service-Name). The service
-      # believes those headers only because the request carries the gateway's X-Gateway-Key.
+      # The gateway validates the JWT, signs it at login, and tells the service who is calling
+      # (X-Player-Id / X-Roles / X-Service-Name); the service believes those headers only because
+      # the request carries the gateway's X-Gateway-Key. The 3.x release still refuses to start
+      # without both token secrets; the service secret is shared under its own name.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
+      INTERNAL_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
 
       # Shared with the gateway. The release refuses to start without both.
       WS_TICKET_SECRET: ${WS_TICKET_SECRET:?set WS_TICKET_SECRET in .env}
@@ -324,6 +380,10 @@ services:
 
       TRADE_TTL_SECONDS: ${PLAYER_TRADE_TTL_SECONDS:-600}
       IDEMPOTENCY_TTL_SECONDS: ${PLAYER_IDEMPOTENCY_TTL_SECONDS:-86400}
+      # Registers http://<container id>:4001 with healthPath /api/health.
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+    # Single instance on its host port: clients connect to its WebSocket directly.
     ports:
       - "4001:4001"
 
@@ -349,7 +409,7 @@ services:
       retries: 10
 
   game-service:
-    image: ${GAME_IMAGE:-dimon1/game-service:latest}
+    image: ${GAME_IMAGE:-dimon1/game-service:3.2.2}
     pull_policy: always
 
     # The release's start script ships without the executable bit,
@@ -369,8 +429,10 @@ services:
       PORT: 4002
       PHX_HOST: localhost
       PHX_SCHEME: http
-      # game-service reads the caller from the gateway's identity headers (it never sees the JWT) ,
-      # so it needs no token secret and has no auth bypass.
+      # game-service reads the caller from the gateway's identity headers (it never sees the JWT).
+      # JWT_SECRET only feeds the runtime :auth block, and the auth bypass stays off.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
+      BYPASS_AUTH: "false"
 
       # Every call game-service makes to another service (world, zombie, resource,
       # exam, player) goes through the gateway, signed with SERVICE_JWT_SECRET.
@@ -382,7 +444,10 @@ services:
       # secret, and the shared key makes it refuse requests that skipped the gateway.
       WS_TICKET_SECRET: ${WS_TICKET_SECRET:?set WS_TICKET_SECRET in .env}
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?set GATEWAY_SHARED_SECRET in .env}
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
 
+    # Single instance on its host port: clients connect to its WebSocket directly.
     ports:
       - "4002:4002"
 
@@ -390,23 +455,16 @@ services:
 
   # Every service in the contract is now in this file.
   # Keep the shape above for anything new:
-  # own database, own volume, required secrets, distinct port.
-  #
-  # base-service and crafting-service ship with MOCK_MODE and stand in for
-  # exam-service / world-service / player-service / resource-service until
-  # those are also live here — see "Running before the whole team is up"
-  # in the root README.
-  #
-  # exam-service and world-service don't have a MOCK_MODE toggle of their own:
-  # their outbound calls (Player/World/Crafting Service from exam-service;
-  # Resource/Crafting Service from world-service) are unconditional stubs
-  # that only log, regardless of what else is running in this compose file.
+  # own database, own volume, required secrets, registered with Service Discovery.
 
   gateway:
-    image: ${GATEWAY_IMAGE:-dimon1/gateway:latest}
+    image: ${GATEWAY_IMAGE:-dimon1/gateway:3.2.2}
     pull_policy: always
     container_name: gateway
     restart: unless-stopped
+    depends_on:
+      service-discovery:
+        condition: service_healthy
     environment:
       PORT: "8080"
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -418,22 +476,24 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
-      PLAYER_SERVICE_URL: ${PLAYER_SERVICE_URL:-http://host.docker.internal:4001}
-      GAME_SERVICE_URL: ${GAME_SERVICE_URL:-http://host.docker.internal:4002}
-      EXAM_SERVICE_URL: ${EXAM_SERVICE_URL:-http://host.docker.internal:4005}
-      WORLD_SERVICE_URL: ${WORLD_SERVICE_URL:-http://host.docker.internal:4004}
-      ZOMBIE_SERVICE_URL: ${ZOMBIE_SERVICE_URL:-http://host.docker.internal:4003}
-      RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://host.docker.internal:4006}
-      BASE_SERVICE_URL: ${BASE_SERVICE_URL:-http://host.docker.internal:4007}
-      CRAFTING_SERVICE_URL: ${CRAFTING_SERVICE_URL:-http://host.docker.internal:4008}
+      # Round-robins over the instances Service Discovery lists as up, refreshed every poll.
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_POLL_MS: ${DISCOVERY_POLL_MS:-5000}
+      # Fixed targets, used only while Service Discovery lists no instance of a service
+      # (or can't be reached). Docker DNS spreads them over the replicas.
+      PLAYER_SERVICE_URL: ${PLAYER_SERVICE_URL:-http://player-service:4001}
+      GAME_SERVICE_URL: ${GAME_SERVICE_URL:-http://game-service:4002}
+      EXAM_SERVICE_URL: ${EXAM_SERVICE_URL:-http://exam-service:4005}
+      WORLD_SERVICE_URL: ${WORLD_SERVICE_URL:-http://world-service:4004}
+      ZOMBIE_SERVICE_URL: ${ZOMBIE_SERVICE_URL:-http://zombie-service:4003}
+      RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://resource-service:4006}
+      BASE_SERVICE_URL: ${BASE_SERVICE_URL:-http://base-service:4007}
+      CRAFTING_SERVICE_URL: ${CRAFTING_SERVICE_URL:-http://crafting-service:4008}
       # What a CLIENT uses to reach each service's WebSocket directly (the gateway only negotiates).
       PLAYER_SERVICE_WS_URL: ${PLAYER_SERVICE_WS_URL:-ws://localhost:4001}
       GAME_SERVICE_WS_URL: ${GAME_SERVICE_WS_URL:-ws://localhost:4002}
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?set GATEWAY_SHARED_SECRET in .env}
       WS_TICKET_SECRET: ${WS_TICKET_SECRET:?set WS_TICKET_SECRET in .env}
-    extra_hosts:
-      # Docker Desktop already resolves host.docker.internal; this makes it work on Linux too.
-      - "host.docker.internal:host-gateway"
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
 
