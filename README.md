@@ -69,6 +69,8 @@ world-service start empty, and their demo data is loaded separately (see
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | exam-service | [`alexandramihalevschi/exam-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
 | world-service | [`alexandramihalevschi/world-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
+| service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
 
 The tag is the service version, so `cobili/base-service:3.0.0` is version 3.0.0.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
@@ -146,6 +148,8 @@ that service alone. See its README.
 | resource-service | 4006 |
 | base-service | 4007, inside the network only (2 replicas) |
 | crafting-service | 4008, inside the network only (2 replicas) |
+| gateway | 8080 |
+| service-discovery | 8500 |
 
 base-service, crafting-service, zombie-service, resource-service and game-service answer
 `GET /health`; player-service answers `GET /api/health`.
@@ -167,9 +171,13 @@ and `instance` says which replica answered.
 
 Each replica registers itself with Service Discovery (`SERVICE_DISCOVERY_URL`, default
 `http://service-discovery:8500`, with `DISCOVERY_SECRET`) and deregisters on `docker compose stop`.
-Until Service Discovery is in this compose file they log `service discovery registration failed,
-retrying` and work as before. The gateway reaches them by service name; spreading requests across
-the replicas comes with its round-robin over Service Discovery (Gateway-team1#19).
+The gateway reads the live instances from Service Discovery every 5 s and round-robins over them;
+with none listed it falls back to the service name. See what is registered:
+
+```bash
+curl http://localhost:8500/health                     # counts of services, instances and bans
+curl http://localhost:8500/services/base-service      # every replica, with its status
+```
 
 The other Ruby services use their own ports:
 
