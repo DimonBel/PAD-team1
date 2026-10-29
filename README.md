@@ -63,8 +63,8 @@ world-service start empty, and their demo data is loaded separately (see
 | --- | --- | --- |
 | base-service | [`cobili/base-service:3.0.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
 | crafting-service | [`cobili/crafting-service:3.0.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
-| player-service | [`dimon1/player-service:0.1.1`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
-| game-service | [`dimon1/game-service:0.1.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
+| player-service | [`dimon1/player-service:3.2.2`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
+| game-service | [`dimon1/game-service:3.2.2`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | exam-service | [`alexandramihalevschi/exam-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
@@ -86,6 +86,38 @@ uncomment.
 | exam-service, world-service | `EXAM_DB_PASSWORD` / `WORLD_DB_PASSWORD`, `EXAM_SECRET_KEY_BASE` / `WORLD_SECRET_KEY_BASE`, `SERVICE_JWT_SECRET`, `GATEWAY_SECRET` | They don't verify JWTs: the API Gateway does, and forwards the caller as headers with `X-Gateway-Secret`, so a request without the right `GATEWAY_SECRET` gets `401`. Reach them through the gateway, they publish no host port. Two replicas each (`EXAM_REPLICAS`, `WORLD_REPLICAS`), restarted if they crash. Outbound calls go through the Gateway at `GATEWAY_URL` (default `http://gateway:8080`). The image migrates on start, safely when the replicas start together; no `command:` override is needed |
 | player-service | `PLAYER_DB_PASSWORD`, `PLAYER_SECRET_KEY_BASE`, `JWT_SECRET`, `SERVICE_JWT_SECRET` | It calls the shared service secret `INTERNAL_JWT_SECRET`, so `docker-compose.yaml` maps `SERVICE_JWT_SECRET` onto it — every service still signs the same tokens. Its entrypoint waits on Postgres and migrates before starting, so it also needs `POSTGRES_HOST` and the credentials as separate variables |
 | game-service | `GAME_DB_PASSWORD`, `GAME_SECRET_KEY_BASE`, `JWT_SECRET` | Has no service secret of its own: it checks for a `service` role in a token signed with `JWT_SECRET`. `GAME_BYPASS_AUTH` defaults to `false` here — the service's own default is `true`, which accepts unsigned requests. Its release start script ships without the executable bit, so `docker-compose.yaml` runs it as `sh /app/bin/server` |
+
+#### player-service and game-service 3.2.2
+
+Version 3.2.2 of both services adds the same three things.
+
+- **Circuit breaker that removes a failing service.** Three failures on one endpoint within
+  the task timeout times 3.5 (35 s by default) remove the whole service: its calls fail fast
+  and the service is deregistered and banned in Service Discovery for `BAN_SECONDS` (60 by
+  default). It comes back when Service Discovery lists it up again, or, with no Service
+  Discovery, after one trial call. game-service wraps every call to the world, zombie, resource,
+  exam and player services in it and answers `503` or `502` instead of crashing while a service
+  is removed. player-service carries the same module, but makes no outbound calls yet, so
+  nothing uses it.
+- **Registration with Service Discovery.** On start each service registers, refreshes every
+  30 seconds, deregisters on shutdown, waits out a ban, and registers only while its database
+  answers.
+- **Structured logging.** One line per request, and a line for every game, account, XP,
+  inventory, friend and trade event, with the request id and the instance id.
+
+| Variable | Used by | Meaning |
+| --- | --- | --- |
+| `SERVICE_DISCOVERY_URL` | player-service, game-service | Address of Service Discovery. Unset: no registration, and a removal stays local. |
+| `DISCOVERY_SECRET` | player-service, game-service | Sent as `X-Discovery-Key` on registration and removal. |
+| `SERVICE_ADVERTISED_URL` | player-service, game-service | Address other containers reach the instance on. Unset or blank: `http://<hostname>:<port>`. |
+| `REQUEST_TIMEOUT_MS` | player-service, game-service | Task timeout, 10000 by default. The breaker window is this times 3.5. |
+| `LOG_LEVEL` | player-service, game-service | `debug`, `info`, `warning` or `error`. |
+
+`docker-compose.yaml` does not set these yet, so both services run without registering until
+they are added. player-service now accepts XP as `delta` with `source_service` and items as
+`code` and `quantity`, and lets a service token read and change a player's inventory.
+game-service still runs as one replica: every instance ticks every session, and its
+PubSub is local to each instance.
 
 #### Building exam-service / world-service from source
 
