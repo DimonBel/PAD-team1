@@ -8,9 +8,38 @@
 # read another one's tables. Ports are distinct so everything runs at once.
 
 # Every service runs a published Docker Hub image (pull_policy: always): `docker compose up` pulls the
-# newest build of each tag and never builds anything locally. Use GATEWAY_IMAGE / PLAYER_IMAGE / GAME_IMAGE in .env
-# to pin another tag.
+# newest build of each tag and never builds anything locally. Use GATEWAY_IMAGE / SERVICE_DISCOVERY_IMAGE /
+# PLAYER_IMAGE / GAME_IMAGE in .env to pin another tag (the -arm64 ones on Apple Silicon).
+#
+# Lab 3: the services register themselves with Service Discovery, and the gateway
+# round-robins over the instances it lists as up.
 services:
+  # ----------------------------------------------------------- service-discovery
+  service-discovery:
+    image: ${SERVICE_DISCOVERY_IMAGE:-dimon1/service-discovery:3.1.5-amd64}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      PORT: "8500"
+      # debug also logs a summary of every health sweep.
+      LOG_LEVEL: ${SD_LOG_LEVEL:-info}
+      # Empty: registration is open. Set it to require X-Discovery-Key on writes;
+      # every service sends the same value.
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+      HEALTH_CHECK_INTERVAL_MS: ${HEALTH_CHECK_INTERVAL_MS:-10000}
+      # Health alerts (down / removed / recovered) go to this Discord webhook. Empty: alerts off.
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      ALERT_COOLDOWN_MS: ${ALERT_COOLDOWN_MS:-60000}
+      # Periodic all-services digest on the same webhook: 0 = off, otherwise every this many ms.
+      DIGEST_INTERVAL_MS: ${DIGEST_INTERVAL_MS:-0}
+    ports:
+      - "${SERVICE_DISCOVERY_HOST_PORT:-8500}:8500"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8500/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ---------------------------------------------------------------- base-service
   base-db:
     image: postgres:16-alpine
@@ -425,10 +454,13 @@ services:
   # gateway; one that fails is logged and doesn't fail the request that caused it.
 
   gateway:
-    image: ${GATEWAY_IMAGE:-dimon1/gateway:latest}
+    image: ${GATEWAY_IMAGE:-dimon1/gateway:3.1.5-amd64}
     pull_policy: always
     container_name: gateway
     restart: unless-stopped
+    depends_on:
+      service-discovery:
+        condition: service_healthy
     environment:
       PORT: "8080"
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -440,13 +472,17 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
-      PLAYER_SERVICE_URL: ${PLAYER_SERVICE_URL:-http://host.docker.internal:4001}
-      GAME_SERVICE_URL: ${GAME_SERVICE_URL:-http://host.docker.internal:4002}
-      ZOMBIE_SERVICE_URL: ${ZOMBIE_SERVICE_URL:-http://host.docker.internal:4003}
-      RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://host.docker.internal:4006}
-      # By service name, the replicas have no host port. The gateway keeps its connection
-      # open, so it stays on one replica until it reads them from Service Discovery and
-      # round-robins (Gateway-team1#19).
+      # Round-robins over the instances Service Discovery lists as up, refreshed every poll.
+      SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
+      DISCOVERY_POLL_MS: ${DISCOVERY_POLL_MS:-5000}
+      # Sent as X-Discovery-Key when the gateway removes a failing instance.
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+      # Fixed targets, used only while Service Discovery lists no instance of a service
+      # (or can't be reached). By service name, all of them run in this file.
+      PLAYER_SERVICE_URL: ${PLAYER_SERVICE_URL:-http://player-service:4001}
+      GAME_SERVICE_URL: ${GAME_SERVICE_URL:-http://game-service:4002}
+      ZOMBIE_SERVICE_URL: ${ZOMBIE_SERVICE_URL:-http://zombie-service:4003}
+      RESOURCE_SERVICE_URL: ${RESOURCE_SERVICE_URL:-http://resource-service:4006}
       BASE_SERVICE_URL: ${BASE_SERVICE_URL:-http://base-service:4007}
       CRAFTING_SERVICE_URL: ${CRAFTING_SERVICE_URL:-http://crafting-service:4008}
       EXAM_SERVICE_URL: ${EXAM_SERVICE_URL:-http://exam-service:4005}
@@ -456,9 +492,6 @@ services:
       GAME_SERVICE_WS_URL: ${GAME_SERVICE_WS_URL:-ws://localhost:4002}
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?set GATEWAY_SHARED_SECRET in .env}
       WS_TICKET_SECRET: ${WS_TICKET_SECRET:?set WS_TICKET_SECRET in .env}
-    extra_hosts:
-      # Docker Desktop already resolves host.docker.internal; this makes it work on Linux too.
-      - "host.docker.internal:host-gateway"
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
 
