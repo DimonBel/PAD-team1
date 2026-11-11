@@ -61,8 +61,8 @@ world-service start empty, and their demo data is loaded separately (see
 
 | Service | Image | Owner |
 | --- | --- | --- |
-| base-service | [`cobili/base-service:3.0.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
-| crafting-service | [`cobili/crafting-service:3.0.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
+| base-service | [`cobili/base-service:4.1.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
+| crafting-service | [`cobili/crafting-service:4.1.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
 | player-service | [`dimon1/player-service:3.2.2`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
 | game-service | [`dimon1/game-service:3.2.2`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
@@ -162,7 +162,7 @@ docker compose exec base-service curl -s localhost:4007/health
 ```
 
 ```json
-{"status":"ok","service":"base-service","instance":"dca470cc53a1","version":"3.0.0","database":"up","mock_mode":true,"uptime_s":4,"in_flight":0,"max_concurrent":8,"memory_mb":61.0}
+{"status":"ok","service":"base-service","instance":"dca470cc53a1","version":"4.1.0","database":"up","mock_mode":true,"uptime_s":4,"in_flight":0,"max_concurrent":8,"memory_mb":61.0}
 ```
 
 From `3.0.0`, base-service and crafting-service also answer `GET /status` with the same body.

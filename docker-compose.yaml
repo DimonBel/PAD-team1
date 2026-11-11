@@ -67,7 +67,7 @@ services:
       retries: 10
 
   base-service:
-    image: cobili/base-service:3.0.0
+    image: cobili/base-service:4.1.0
     pull_policy: always
     depends_on:
       base-db:
@@ -114,7 +114,7 @@ services:
       retries: 10
 
   crafting-service:
-    image: cobili/crafting-service:3.0.0
+    image: cobili/crafting-service:4.1.0
     pull_policy: always
     depends_on:
       crafting-db:
