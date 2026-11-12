@@ -104,9 +104,106 @@
     { "key": "player_token", "value": "", "type": "string" },
     { "key": "moderator_token", "value": "", "type": "string" },
     { "key": "service_token", "value": "", "type": "string" },
-    { "key": "gateway_secret", "value": "", "type": "string" }
+    { "key": "gateway_secret", "value": "", "type": "string" },
+    { "key": "discovery_url", "value": "http://localhost:8500", "type": "string" },
+    { "key": "broker_url", "value": "http://localhost:8090", "type": "string" },
+    { "key": "logs_admin_key", "value": "", "type": "string" },
+    { "key": "polls", "value": "0", "type": "string" }
   ],
   "item": [
+    {
+      "name": "0. Health",
+      "description": "Is world-service up, and can the platform reach it? Service Discovery lists its live instances (their /health answers), and the Message Broker has found them with a gRPC address and a closed circuit. Needs `discovery_url` (default http://localhost:8500) and `broker_url` (default http://localhost:8090; empty skips the broker check on a stack without it).",
+      "item": [
+        {
+          "name": "world-service is up in Service Discovery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/services/world-service?status=up",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// The service's own /health has no host port (replicas) and isn't routed by the Gateway. Service",
+                  "// Discovery calls it every 10 s, so \"listed as up\" means every listed instance answers /health.",
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const instances = pm.response.json().instances || [];",
+                  "pm.test(\"at least one live instance\", () => pm.expect(instances.length).to.be.above(0));",
+                  "pm.test(\"every instance reports its version and its gRPC address (Lab 4)\", () => {",
+                  "    instances.forEach((i) => {",
+                  "        pm.expect(i.status).to.eql(\"up\");",
+                  "        pm.expect(i.metadata.version, i.id).to.match(/^\\d+\\.\\d+\\.\\d+$/);",
+                  "        pm.expect(i.metadata.grpc_url, i.id).to.be.a(\"string\").and.not.empty;",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test(\"subscribed to exam.passed at registration (Lab 4 topics)\", () => {",
+                  "    instances.forEach((i) => pm.expect(i.topics || [], i.id).to.include(\"exam.passed\"));",
+                  "});",
+                  "",
+                  "console.log(\"world-service instances: \" + instances.map((i) => i.id + \" \" + i.metadata.version).join(\", \"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Message Broker sees world-service: gRPC address, circuit closed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Rollback stacks run without the Message Broker: leave broker_url empty to skip this.",
+                  "if (!pm.variables.get(\"broker_url\")) {",
+                  "    console.log(\"Skipped: broker_url is empty (no Message Broker).\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// The broker learns the instances from Service Discovery and keeps a circuit breaker for each.",
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const health = pm.response.json();",
+                  "const mine = (health.subscribers || []).filter((s) => s.service === \"world-service\");",
+                  "const found = mine.filter((s) => s.source === \"discovery\");",
+                  "pm.test(\"the broker reads Service Discovery\", () => pm.expect(health.discovery.enabled).to.eql(true));",
+                  "pm.test(\"world-service instances found through Service Discovery, each with a gRPC address\", () => {",
+                  "    pm.expect(found.length).to.be.above(0);",
+                  "    found.forEach((s) => pm.expect(s.grpcUrl, s.instanceId).to.be.a(\"string\").and.not.empty);",
+                  "});",
+                  "pm.test(\"no world-service circuit is open\", () => mine.forEach((s) => pm.expect(s.circuit.state, s.instanceId).to.not.eql(\"open\")));",
+                  "pm.test(\"the broker serves gRPC\", () => pm.expect(health.grpcPort).to.be.a(\"number\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "1. Map, Zones, Rooms",
       "item": [
@@ -842,6 +939,443 @@
             }
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Lab 4 — internal routes, events, logs",
+      "description": "Lab 4. A player gets 404 on the routes only other services may call, which the Gateway keeps internal; an `exam.passed` event published to the Message Broker unlocks a wing (World Service subscribed to the topic when it registered with Service Discovery), and the same event again changes nothing; the Gateway's log download has this service's lines (set `logs_admin_key` to the Gateway's LOGS_ADMIN_KEY, empty skips it). The event requests need `broker_url`. Run after folders 1-3.",
+      "item": [
+        {
+          "name": "Player unlocks a section (internal: 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/world/unlocks",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{player_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"postman-player-try-{{run_id}}\",\n  \"player_id\": \"postman-player-{{run_id}}\",\n  \"course_id\": \"{{course_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 ROUTE_NOT_FOUND: the Gateway keeps this route for services\", () => {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error).to.eql(\"ROUTE_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Player sets a barricade (internal: 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/world/rooms/{{room_id}}/barricades",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{player_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"postman-player-try-{{run_id}}\",\n  \"barricade_level\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 ROUTE_NOT_FOUND: the Gateway keeps this route for services\", () => {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error).to.eql(\"ROUTE_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Player lists resource nodes (internal: 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/world/rooms/{{room_id}}/resource-nodes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{player_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 ROUTE_NOT_FOUND: the Gateway keeps this route for services\", () => {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error).to.eql(\"ROUTE_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Player lists zombie spawns (internal: 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/world/zombie-spawns?zone_id={{zone_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{player_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 ROUTE_NOT_FOUND: the Gateway keeps this route for services\", () => {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error).to.eql(\"ROUTE_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Exam Service publishes exam.passed to the broker",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{broker_url}}/v1/topics/exam.passed/events",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"postman-evt-{{run_id}}\",\n  \"data\": {\n    \"player_id\": \"postman-player-{{run_id}}\",\n    \"course_id\": \"postman-evt-{{run_id}}\",\n    \"exam_id\": \"postman-exam-{{run_id}}\",\n    \"score\": 100,\n    \"passed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "The producer names the topic, never the target. `service_token` is an exam-service token, as the broker requires a service token to publish."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Rollback stacks run without the Message Broker: leave broker_url empty to skip this.",
+                  "if (!pm.variables.get(\"broker_url\")) {",
+                  "    console.log(\"Skipped: broker_url is empty (no Message Broker).\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"202: the broker took it for every service that wants exam.passed\", () => {",
+                  "    pm.response.to.have.status(202);",
+                  "    pm.expect(pm.response.json().event_id).to.eql(\"postman-evt-\" + pm.collectionVariables.get(\"run_id\"));",
+                  "    pm.expect(pm.response.json().subscribers).to.be.at.least(1);",
+                  "});",
+                  "pm.collectionVariables.set(\"polls\", \"0\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "World unlocked the event's wing",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/world/zones/zone-postman-evt-{{run_id}}-wing",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{player_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Rollback stacks run without the Message Broker: leave broker_url empty to skip this.",
+                  "if (!pm.variables.get(\"broker_url\")) {",
+                  "    console.log(\"Skipped: broker_url is empty (no Message Broker).\");",
+                  "    pm.execution.skipRequest();",
+                  "}",
+                  "setTimeout(() => {}, Number(pm.collectionVariables.get(\"polls\") || 0) === 0 ? 0 : 1000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const polls = Number(pm.collectionVariables.get(\"polls\") || 0) + 1;",
+                  "const done = (() => { try { return pm.response.code === 200 && pm.response.json().unlocked === true; } catch (e) { return false; } })();",
+                  "if (!done && polls < 20) {",
+                  "    pm.collectionVariables.set(\"polls\", String(polls));",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.set(\"polls\", \"0\");",
+                  "    pm.test(\"World Service unlocked the event's wing (after \" + polls + \" tries)\", () => pm.expect(done).to.eql(true));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The same event again",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{broker_url}}/v1/topics/exam.passed/events",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"postman-evt-{{run_id}}\",\n  \"data\": {\n    \"player_id\": \"postman-player-{{run_id}}\",\n    \"course_id\": \"postman-evt-{{run_id}}\",\n    \"exam_id\": \"postman-exam-{{run_id}}\",\n    \"score\": 100,\n    \"passed\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Rollback stacks run without the Message Broker: leave broker_url empty to skip this.",
+                  "if (!pm.variables.get(\"broker_url\")) {",
+                  "    console.log(\"Skipped: broker_url is empty (no Message Broker).\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"202: the broker took it for every service that wants exam.passed\", () => {",
+                  "    pm.response.to.have.status(202);",
+                  "    pm.expect(pm.response.json().event_id).to.eql(\"postman-evt-\" + pm.collectionVariables.get(\"run_id\"));",
+                  "    pm.expect(pm.response.json().subscribers).to.be.at.least(1);",
+                  "});",
+                  "pm.collectionVariables.set(\"polls\", \"0\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Still one wing with 2 rooms (the replay changed nothing)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/world/rooms?zone_id=zone-postman-evt-{{run_id}}-wing",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{player_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Rollback stacks run without the Message Broker: leave broker_url empty to skip this.",
+                  "if (!pm.variables.get(\"broker_url\")) {",
+                  "    console.log(\"Skipped: broker_url is empty (no Message Broker).\");",
+                  "    pm.execution.skipRequest();",
+                  "}",
+                  "",
+                  "// Gives the replayed event time to arrive.",
+                  "setTimeout(() => {}, 2000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"2 rooms, as after the first delivery\", () => pm.expect(pm.response.json().length).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The Gateway's log download has world-service lines (GET /api/logs)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Key",
+                "value": "{{logs_admin_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/logs?service=world-service&limit=50",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// GET /api/logs needs the Gateway's LOGS_ADMIN_KEY; without it the Gateway doesn't serve the route.",
+                  "if (!pm.variables.get(\"logs_admin_key\")) {",
+                  "    console.log(\"Skipped: set logs_admin_key to the Gateway's LOGS_ADMIN_KEY to check the log download.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.text().split(\"\\n\").filter(Boolean).map((l) => JSON.parse(l));",
+                  "pm.test(\"only world-service lines, from its own log file\", () => {",
+                  "    pm.expect(rows.length).to.be.above(0);",
+                  "    rows.forEach((r) => pm.expect(r.service).to.eql(\"world-service\"));",
+                  "});",
+                  "pm.test(\"lines inside a request carry its request_id\", () => pm.expect(rows.some((r) => r.request_id)).to.eql(true));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

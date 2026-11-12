@@ -67,8 +67,8 @@ world-service start empty, and their demo data is loaded separately (see
 | game-service | [`dimon1/game-service:3.2.2`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
-| exam-service | [`alexandramihalevschi/exam-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
-| world-service | [`alexandramihalevschi/world-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| exam-service | [`alexandramihalevschi/exam-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
+| world-service | [`alexandramihalevschi/world-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 | gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
 
@@ -204,7 +204,7 @@ docker compose exec gateway wget -qO- http://world-service:4004/health  # world-
 ```
 
 ```json
-{"status":"ok","version":"3.0.0","service":"exam-service","database":"up","instance_id":"606dbe47aa60","memory_mb":108.8,"in_flight":0,"max_concurrent":50,"uptime_s":42}
+{"status":"ok","version":"4.0.0","service":"exam-service","database":"up","instance_id":"606dbe47aa60","memory_mb":108.8,"in_flight":0,"max_concurrent":50,"uptime_s":42}
 ```
 
 `instance_id` is the replica's container id, and `in_flight`, `max_concurrent` and `memory_mb`
