@@ -24,17 +24,73 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 ## Architectural Diagram
 
-![Architectural Diagram](./docs/architecture.jpg)
+Since Lab 4, the API Gateway is still the single entry point for clients, and the **Message Broker** carries every other hop. Clients call the Gateway, which checks the caller's JWT and hands each `/api/...` request to the broker. Services call each other only through the broker, over **gRPC**, and never name one another for events: they publish to a **topic**, and the broker delivers to every service that subscribed to it. Load balancing, retries and circuit breakers live in the broker, which learns each service's instances, gRPC addresses and topics from **Service Discovery**. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database.
 
-The API Gateway is the single entry point to the platform. Clients never call a service directly: every request goes to the Gateway, which checks the caller's JWT and routes the request by its path to the service that owns it. Service-to-service calls take the same route. When Exam Service tells Player Service to award XP, for example, it calls the Gateway, and the Gateway forwards the request to Player Service. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database. The Game Service sits at the center of the live game loop.
+![Architectural Diagram, Lab 3](./docs/diagram_new.jpg)
+
+Who calls whom. Every solid arrow is a gRPC call that goes **through the broker**: the caller sends it to the broker with `x-broker-service: <target>`, and the broker picks an instance of the target. Dashed arrows are topics: the publisher names only the topic, and the broker delivers it to whoever subscribed.
+
+```mermaid
+flowchart LR
+    game["Game"]
+    base["Base"]
+    crafting["Crafting"]
+    zombie["Zombie"]
+    exam["Exam"]
+    world["World"]
+    player["Player"]
+    resource["Resource"]
+
+    game --> exam & world & player & resource & zombie
+    base --> world & player & resource
+    crafting --> exam & world & player & resource
+    zombie --> player & resource
+    exam --> player
+    world --> resource
+
+    exam -. "exam.passed" .-> world
+    exam -. "exam.passed" .-> crafting
+    world -. "world.wing_unlocked" .-> crafting
+```
+
+| Caller | Target | gRPC methods |
+| --- | --- | --- |
+| Game | Exam | `ListCourses`, `StartAttempt`, `CancelAttempt` |
+| Game | World | `GetMap`, `ListRooms` |
+| Game | Player | `GetXp`, `AdjustXp`, `GetInventory`, `ChangeItemQuantity` |
+| Game | Resource | `ListPoints`, `Gather`, `UpdateEntity` |
+| Game | Zombie | `ListTypes` |
+| Base | World | `GetRoom`, `SetBarricadeLevel` |
+| Base | Player | `GetXp`, `AdjustXp`, `AddItem`, `ChangeItemQuantity` |
+| Base | Resource | `GetEntity`, `UpdateEntity` |
+| Crafting | Exam | `ListPlayerExams` |
+| Crafting | World | `GetZone` |
+| Crafting | Player | `GetXp`, `AdjustXp`, `AddItem`, `ChangeItemQuantity` |
+| Crafting | Resource | `GetEntity`, `UpdateEntity` |
+| Zombie | Player | `AddItem`, `ChangeItemQuantity` |
+| Zombie | Resource | `UpdateMap` |
+| Exam | Player | `AdjustXp` |
+| World | Resource | `CreatePoint` |
 
 | Connection | Protocol |
 | --- | --- |
-| Client → Gateway → service (every `/api/...` route) | REST over HTTP |
-| Service → Gateway → service (e.g. Exam → Player, World → Resource, Zombie → World) | REST over HTTP, with a service-to-service JWT |
-| Client ↔ Gateway ↔ Game Service (`/ws/game/lobbies/{lobby_id}`) | WebSocket, negotiated at the Gateway and proxied to the Game Service |
+| Client → Gateway → broker → service (every `/api/...` route) | REST over HTTP. The Gateway answers `404 ROUTE_NOT_FOUND` to a player on the routes kept for services (`internal` in its `config/routes.json`). |
+| Service → broker → service (every call above) | gRPC (`proto/*/v1/*.proto`) on the broker's port 9090, with a service-to-service JWT. Without `BROKER_GRPC_URL`, a service falls back to REST through the broker. |
+| Service → broker → subscribers (topics) | gRPC `events.v1.Events/Publish`, delivered with `events.v1.Events/Deliver`. `exam.passed` goes to World and Crafting, `world.wing_unlocked` to Crafting. `world.resource_node_created` and `zombie.killed` are published, but no service subscribes to them yet. |
+| Service → Service Discovery | REST: registration with its gRPC address and topics, then heartbeats. The broker reads it every 5 s. |
+| Client ↔ Player / Game Service | WebSocket. The client asks the Gateway for a ticket (`POST /api/players/{player_id}/connect`, `POST /api/game/lobbies/{lobby_id}/connect`), then connects to the service with it. |
+| Every service → shared log volume → Gateway | Each instance writes JSON lines to its own file; `GET /api/logs` on the Gateway merges them. |
 
-The WebSocket carries live game events, such as action progress, zombie attacks and day/night changes (see [WebSocket Connection](#websocket-connection)). Everything else is REST.
+The WebSocket carries live events: presence, friends and trades from Player Service, and action progress, zombie attacks and day/night changes from Game Service (see [WebSocket Connection](#websocket-connection)).
+
+<details>
+<summary>Lab 3 diagram, before the Message Broker</summary>
+
+In Lab 3, the Gateway also routed service-to-service calls over REST and balanced them between instances itself.
+
+![Architectural Diagram, Lab 3](./docs/architecture.jpg)
+
+</details>
 
 ***
 
