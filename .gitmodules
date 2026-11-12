@@ -30,3 +30,7 @@
 	path = Service-Discovery-team1
 	url = https://github.com/DimonBel/Service-Discovery-team1.git
 	branch = main
+[submodule "MessageBroker-team1"]
+	path = MessageBroker-team1
+	url = https://github.com/DimonBel/MessageBroker-team1.git
+	branch = main

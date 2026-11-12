@@ -83,6 +83,27 @@ and `sub: "service:<name>"`), stored in `player_token` / `moderator_token` / `se
   send (`X-Gateway-Secret`, `X-Player-Id`, `X-Roles`, `X-Service-Name`). Leave `gateway_secret`
   empty to go through the Gateway; in direct mode the `jwt_secret`s don't matter.
 
+Both collections start with **folder 0, Health**, and end with **folder 5, Lab 4**:
+
+- Folder 0 checks the service is listed as up in Service Discovery, with its version and gRPC
+  address (world-service also with its `exam.passed` topic). It then checks the Message Broker
+  found the service's instances there, each with a gRPC address and no open circuit. The
+  service's own `/health` has no host port and isn't routed by the Gateway, and Service
+  Discovery calls it every 10 s.
+- Folder 5 checks that a player gets `404 ROUTE_NOT_FOUND` on every route the Gateway keeps
+  for services, plus the parts of Lab 4 that cross services:
+  - exam-service: the exam passed in folder 2 unlocks its wing in World Service.
+  - world-service: an `exam.passed` event published to the broker unlocks a wing, and
+    publishing the same event again changes nothing.
+  - Both: the Gateway's log download (`GET /api/logs`) has the service's lines, with their
+    `request_id`.
+- Variables:
+  - `discovery_url`: default `http://localhost:8500`.
+  - `broker_url`: default `http://localhost:8090`. Leave it empty on a stack without the broker,
+    and its requests are skipped.
+  - `logs_admin_key`: the Gateway's `LOGS_ADMIN_KEY`. While it's empty, the log requests are
+    skipped.
+
 ## Running in Postman
 
 Open the Collection Runner and run the folders top to bottom. They are numbered
@@ -120,6 +141,10 @@ newman run postman/exam-service.postman_collection.json \
 newman run postman/world-service.postman_collection.json \
   --env-var jwt_secret="$JWT_SECRET" \
   --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
+# Folder 5's log checks need the Gateway's key; other host ports go in the same way:
+newman run postman/world-service.postman_collection.json \
+  --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET" \
+  --env-var logs_admin_key="$LOGS_ADMIN_KEY" --env-var broker_url=http://localhost:8090
 # Temporary, without a Gateway: straight at the service, with the Gateway secret
 newman run postman/exam-service.postman_collection.json \
   --env-var base_url=http://localhost:4005 --env-var gateway_secret="$GATEWAY_SECRET"
@@ -144,8 +169,8 @@ Last run against a freshly migrated and seeded database:
 | --- | --- | --- | --- |
 | base-service | 35 | 36 | 0 |
 | crafting-service | 24 | 25 | 0 |
-| exam-service | 26 | 43 | 0 (2.0.1 through the Gateway, two runs in a row; folder 4 skipped) |
-| world-service | 25 | 46 | 0 (2.0.1 through the Gateway, two runs in a row) |
+| exam-service | 35 | 62 | 0 (Lab 4 stack: through the Gateway and the broker, log key set, two runs in a row; folder 4 skipped) |
+| world-service | 36 | 67 | 0 (Lab 4 stack: through the Gateway and the broker, log key set, two runs in a row) |
 | player-service | not run yet | | |
 | game-service | not run yet | | |
 

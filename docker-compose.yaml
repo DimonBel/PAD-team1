@@ -67,7 +67,7 @@ services:
       retries: 10
 
   base-service:
-    image: cobili/base-service:3.0.0
+    image: cobili/base-service:4.2.0
     pull_policy: always
     depends_on:
       base-db:
@@ -114,7 +114,7 @@ services:
       retries: 10
 
   crafting-service:
-    image: cobili/crafting-service:3.0.0
+    image: cobili/crafting-service:4.2.0
     pull_policy: always
     depends_on:
       crafting-db:
@@ -161,7 +161,7 @@ services:
 
   world-service:
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/world-service:3.0.0
+    image: alexandramihalevschi/world-service:4.0.0
     pull_policy: always
     depends_on:
       world-db:
@@ -211,7 +211,7 @@ services:
 
   exam-service:
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/exam-service:3.0.0
+    image: alexandramihalevschi/exam-service:4.0.0
     pull_policy: always
     depends_on:
       exam-db:
@@ -348,7 +348,7 @@ services:
       retries: 10
 
   player-service:
-    image: ${PLAYER_IMAGE:-dimon1/player-service:3.2.2}
+    image: ${PLAYER_IMAGE:-dimon1/player-service:4.0.1}
     pull_policy: always
     depends_on:
       player-db:
@@ -409,7 +409,7 @@ services:
       retries: 10
 
   game-service:
-    image: ${GAME_IMAGE:-dimon1/game-service:3.2.2}
+    image: ${GAME_IMAGE:-dimon1/game-service:4.0.1}
     pull_policy: always
 
     # The release's start script ships without the executable bit,
@@ -450,6 +450,65 @@ services:
     # Single instance on its host port: clients connect to its WebSocket directly.
     ports:
       - "4002:4002"
+
+  # ---------------------------------------------------------------- message-broker
+
+  # Lab 4: the Message Broker (MessageBroker-team1, 4.1.0). It owns Gateway -> service and
+  # service -> service delivery: per-service queues, load balancing, retries, circuit breakers,
+  # gRPC on 9090, topics and the dead letter channel. Built from the submodule, since its image
+  # isn't on Docker Hub yet.
+  #
+  # Nothing is routed through it yet: the services and the Gateway use it once BROKER_URL and
+  # BROKER_GRPC_URL are set on them, which needs Gateway 4.x, a Player Service with gRPC and a
+  # Service Discovery that keeps topics. Until then it runs on its own: GET /health, /v1/topics.
+  message-broker:
+    image: pad-team1/message-broker:local
+    build: ./MessageBroker-team1
+    pull_policy: build
+    restart: unless-stopped
+    depends_on:
+      service-discovery:
+        condition: service_healthy
+    environment:
+      PORT: "8090"
+      BROKER_GRPC_PORT: "9090"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?set GATEWAY_SHARED_SECRET in .env}
+      # Empty: the /v1/admin routes are off. Set it to inspect queues, circuits and dead letters.
+      BROKER_ADMIN_SECRET: ${BROKER_ADMIN_SECRET:-}
+      # static: one Docker name per service (fallback); discovery: every replica registered with
+      # Service Discovery; explicit: POST /v1/subscribers.
+      BROKER_SUBSCRIBER_SOURCE: static,discovery,explicit
+      SERVICE_DISCOVERY_URL: http://service-discovery:8500
+      DISCOVERY_POLL_MS: "5000"
+      BROKER_PATH_ROUTING: "true"
+      # By the load each instance reports in /health (in_flight / max_concurrent).
+      BROKER_LB_STRATEGY: ${BROKER_LB_STRATEGY:-service-load}
+      # Every delivery on a thread of its own; inline runs them on the event loop.
+      BROKER_THREADING: ${BROKER_THREADING:-per-request}
+      BROKER_MAX_THREADS: ${BROKER_MAX_THREADS:-64}
+      BROKER_REQUEST_TIMEOUT_MS: ${BROKER_REQUEST_TIMEOUT_MS:-8000}
+      BROKER_MAX_ATTEMPTS: ${BROKER_MAX_ATTEMPTS:-3}
+      BROKER_CIRCUIT_THRESHOLD: ${BROKER_CIRCUIT_THRESHOLD:-3}
+      BROKER_CIRCUIT_WINDOW_MS: ${BROKER_CIRCUIT_WINDOW_MS:-35000}
+      BROKER_CIRCUIT_OPEN_MS: ${BROKER_CIRCUIT_OPEN_MS:-35000}
+      # Dead letters and events waiting in topic queues are kept in memory. BROKER_DATA_DIR: /data
+      # would keep them in /data/broker.sqlite across restarts, once the broker's image owns /data
+      # (4.1.0's doesn't, so it can't open the file on the broker-data volume).
+      BROKER_DLQ_MAX: ${BROKER_DLQ_MAX:-1000}
+      BROKER_DLQ_TTL_MS: ${BROKER_DLQ_TTL_MS:-604800000}
+      # Name lookups of services with no running container take seconds; more threads keep them
+      # from holding up every other outbound call.
+      UV_THREADPOOL_SIZE: "32"
+    ports:
+      - "127.0.0.1:${BROKER_HOST_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ------------------------------------------------------------------- the rest
 

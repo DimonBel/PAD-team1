@@ -24,17 +24,73 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 ## Architectural Diagram
 
-![Architectural Diagram](./docs/architecture.jpg)
+Since Lab 4, the API Gateway is still the single entry point for clients, and the **Message Broker** carries every other hop. Clients call the Gateway, which checks the caller's JWT and hands each `/api/...` request to the broker. Services call each other only through the broker, over **gRPC**, and never name one another for events: they publish to a **topic**, and the broker delivers to every service that subscribed to it. Load balancing, retries and circuit breakers live in the broker, which learns each service's instances, gRPC addresses and topics from **Service Discovery**. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database.
 
-The API Gateway is the single entry point to the platform. Clients never call a service directly: every request goes to the Gateway, which checks the caller's JWT and routes the request by its path to the service that owns it. Service-to-service calls take the same route. When Exam Service tells Player Service to award XP, for example, it calls the Gateway, and the Gateway forwards the request to Player Service. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database. The Game Service sits at the center of the live game loop.
+![Architectural Diagram, Lab 3](./docs/diagram_new.jpg)
+
+Who calls whom. Every solid arrow is a gRPC call that goes **through the broker**: the caller sends it to the broker with `x-broker-service: <target>`, and the broker picks an instance of the target. Dashed arrows are topics: the publisher names only the topic, and the broker delivers it to whoever subscribed.
+
+```mermaid
+flowchart LR
+    game["Game"]
+    base["Base"]
+    crafting["Crafting"]
+    zombie["Zombie"]
+    exam["Exam"]
+    world["World"]
+    player["Player"]
+    resource["Resource"]
+
+    game --> exam & world & player & resource & zombie
+    base --> world & player & resource
+    crafting --> exam & world & player & resource
+    zombie --> player & resource
+    exam --> player
+    world --> resource
+
+    exam -. "exam.passed" .-> world
+    exam -. "exam.passed" .-> crafting
+    world -. "world.wing_unlocked" .-> crafting
+```
+
+| Caller | Target | gRPC methods |
+| --- | --- | --- |
+| Game | Exam | `ListCourses`, `StartAttempt`, `CancelAttempt` |
+| Game | World | `GetMap`, `ListRooms` |
+| Game | Player | `GetXp`, `AdjustXp`, `GetInventory`, `ChangeItemQuantity` |
+| Game | Resource | `ListPoints`, `Gather`, `UpdateEntity` |
+| Game | Zombie | `ListTypes` |
+| Base | World | `GetRoom`, `SetBarricadeLevel` |
+| Base | Player | `GetXp`, `AdjustXp`, `AddItem`, `ChangeItemQuantity` |
+| Base | Resource | `GetEntity`, `UpdateEntity` |
+| Crafting | Exam | `ListPlayerExams` |
+| Crafting | World | `GetZone` |
+| Crafting | Player | `GetXp`, `AdjustXp`, `AddItem`, `ChangeItemQuantity` |
+| Crafting | Resource | `GetEntity`, `UpdateEntity` |
+| Zombie | Player | `AddItem`, `ChangeItemQuantity` |
+| Zombie | Resource | `UpdateMap` |
+| Exam | Player | `AdjustXp` |
+| World | Resource | `CreatePoint` |
 
 | Connection | Protocol |
 | --- | --- |
-| Client → Gateway → service (every `/api/...` route) | REST over HTTP |
-| Service → Gateway → service (e.g. Exam → Player, World → Resource, Zombie → World) | REST over HTTP, with a service-to-service JWT |
-| Client ↔ Gateway ↔ Game Service (`/ws/game/lobbies/{lobby_id}`) | WebSocket, negotiated at the Gateway and proxied to the Game Service |
+| Client → Gateway → broker → service (every `/api/...` route) | REST over HTTP. The Gateway answers `404 ROUTE_NOT_FOUND` to a player on the routes kept for services (`internal` in its `config/routes.json`). |
+| Service → broker → service (every call above) | gRPC (`proto/*/v1/*.proto`) on the broker's port 9090, with a service-to-service JWT. Without `BROKER_GRPC_URL`, a service falls back to REST through the broker. |
+| Service → broker → subscribers (topics) | gRPC `events.v1.Events/Publish`, delivered with `events.v1.Events/Deliver`. `exam.passed` goes to World and Crafting, `world.wing_unlocked` to Crafting. `world.resource_node_created` and `zombie.killed` are published, but no service subscribes to them yet. |
+| Service → Service Discovery | REST: registration with its gRPC address and topics, then heartbeats. The broker reads it every 5 s. |
+| Client ↔ Player / Game Service | WebSocket. The client asks the Gateway for a ticket (`POST /api/players/{player_id}/connect`, `POST /api/game/lobbies/{lobby_id}/connect`), then connects to the service with it. |
+| Every service → shared log volume → Gateway | Each instance writes JSON lines to its own file; `GET /api/logs` on the Gateway merges them. |
 
-The WebSocket carries live game events, such as action progress, zombie attacks and day/night changes (see [WebSocket Connection](#websocket-connection)). Everything else is REST.
+The WebSocket carries live events: presence, friends and trades from Player Service, and action progress, zombie attacks and day/night changes from Game Service (see [WebSocket Connection](#websocket-connection)).
+
+<details>
+<summary>Lab 3 diagram, before the Message Broker</summary>
+
+In Lab 3, the Gateway also routed service-to-service calls over REST and balanced them between instances itself.
+
+![Architectural Diagram, Lab 3](./docs/architecture.jpg)
+
+</details>
 
 ***
 
@@ -61,14 +117,14 @@ world-service start empty, and their demo data is loaded separately (see
 
 | Service | Image | Owner |
 | --- | --- | --- |
-| base-service | [`cobili/base-service:3.0.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
-| crafting-service | [`cobili/crafting-service:3.0.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
-| player-service | [`dimon1/player-service:3.2.2`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
-| game-service | [`dimon1/game-service:3.2.2`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
+| base-service | [`cobili/base-service:4.2.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
+| crafting-service | [`cobili/crafting-service:4.2.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
+| player-service | [`dimon1/player-service:4.0.1`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
+| game-service | [`dimon1/game-service:4.0.1`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
-| exam-service | [`alexandramihalevschi/exam-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
-| world-service | [`alexandramihalevschi/world-service:3.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| exam-service | [`alexandramihalevschi/exam-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
+| world-service | [`alexandramihalevschi/world-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 | gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
 
@@ -121,6 +177,22 @@ they are added. player-service now accepts XP as `delta` with `source_service` a
 game-service still runs as one replica: every instance ticks every session, and its
 PubSub is local to each instance.
 
+#### player-service and game-service 4.0.1
+
+Version 4.0.1 of both services adds three things, all off until configured, so the compose runs
+them as before.
+
+- **A gRPC server** (`player.v1.Players`, `game.v1.Games`) on `GRPC_PORT` (`50051`, never
+  published), reached through the Message Broker at the `grpc_url` the service registers.
+  game-service also sends its calls to the player, world, zombie, resource and exam services over
+  gRPC through the broker when `BROKER_GRPC_URL` is set (`message-broker:9090`); unset keeps REST.
+- **WebSocket tickets**, signed with `WS_TICKET_SECRET`, which the compose already requires.
+- **File logging.** With `LOG_DIR` set, every log line also goes to
+  `<LOG_DIR>/<service>/<instance>.log` as JSON, for the Gateway's `GET /api/logs`.
+
+`docker-compose.yaml` does not set `BROKER_GRPC_URL` or `LOG_DIR` yet; sending game-service's calls
+through the broker also needs a Gateway 4.x.
+
 #### Building exam-service / world-service from source
 
 Each lives in its own private repository, linked here as a git submodule. Their CI publishes
@@ -162,7 +234,7 @@ docker compose exec base-service curl -s localhost:4007/health
 ```
 
 ```json
-{"status":"ok","service":"base-service","instance":"dca470cc53a1","version":"3.0.0","database":"up","mock_mode":true,"uptime_s":4,"in_flight":0,"max_concurrent":8,"memory_mb":61.0}
+{"status":"ok","service":"base-service","instance":"dca470cc53a1","version":"4.2.0","database":"up","mock_mode":true,"uptime_s":4,"in_flight":0,"max_concurrent":8,"memory_mb":61.0}
 ```
 
 From `3.0.0`, base-service and crafting-service also answer `GET /status` with the same body.
@@ -204,7 +276,7 @@ docker compose exec gateway wget -qO- http://world-service:4004/health  # world-
 ```
 
 ```json
-{"status":"ok","version":"3.0.0","service":"exam-service","database":"up","instance_id":"606dbe47aa60","memory_mb":108.8,"in_flight":0,"max_concurrent":50,"uptime_s":42}
+{"status":"ok","version":"4.0.0","service":"exam-service","database":"up","instance_id":"606dbe47aa60","memory_mb":108.8,"in_flight":0,"max_concurrent":50,"uptime_s":42}
 ```
 
 `instance_id` is the replica's container id, and `in_flight`, `max_concurrent` and `memory_mb`
