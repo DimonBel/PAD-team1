@@ -161,7 +161,7 @@ services:
 
   world-service:
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/world-service:3.0.0
+    image: alexandramihalevschi/world-service:4.0.0
     pull_policy: always
     depends_on:
       world-db:
@@ -211,7 +211,7 @@ services:
 
   exam-service:
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/exam-service:3.0.0
+    image: alexandramihalevschi/exam-service:4.0.0
     pull_policy: always
     depends_on:
       exam-db:
