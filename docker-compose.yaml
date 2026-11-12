@@ -348,7 +348,7 @@ services:
       retries: 10
 
   player-service:
-    image: ${PLAYER_IMAGE:-dimon1/player-service:3.2.2}
+    image: ${PLAYER_IMAGE:-dimon1/player-service:4.0.1}
     pull_policy: always
     depends_on:
       player-db:
@@ -409,7 +409,7 @@ services:
       retries: 10
 
   game-service:
-    image: ${GAME_IMAGE:-dimon1/game-service:3.2.2}
+    image: ${GAME_IMAGE:-dimon1/game-service:4.0.1}
     pull_policy: always
 
     # The release's start script ships without the executable bit,

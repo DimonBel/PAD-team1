@@ -119,8 +119,8 @@ world-service start empty, and their demo data is loaded separately (see
 | --- | --- | --- |
 | base-service | [`cobili/base-service:4.2.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
 | crafting-service | [`cobili/crafting-service:4.2.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
-| player-service | [`dimon1/player-service:3.2.2`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
-| game-service | [`dimon1/game-service:3.2.2`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
+| player-service | [`dimon1/player-service:4.0.1`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
+| game-service | [`dimon1/game-service:4.0.1`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | exam-service | [`alexandramihalevschi/exam-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
@@ -176,6 +176,22 @@ they are added. player-service now accepts XP as `delta` with `source_service` a
 `code` and `quantity`, and lets a service token read and change a player's inventory.
 game-service still runs as one replica: every instance ticks every session, and its
 PubSub is local to each instance.
+
+#### player-service and game-service 4.0.1
+
+Version 4.0.1 of both services adds three things, all off until configured, so the compose runs
+them as before.
+
+- **A gRPC server** (`player.v1.Players`, `game.v1.Games`) on `GRPC_PORT` (`50051`, never
+  published), reached through the Message Broker at the `grpc_url` the service registers.
+  game-service also sends its calls to the player, world, zombie, resource and exam services over
+  gRPC through the broker when `BROKER_GRPC_URL` is set (`message-broker:9090`); unset keeps REST.
+- **WebSocket tickets**, signed with `WS_TICKET_SECRET`, which the compose already requires.
+- **File logging.** With `LOG_DIR` set, every log line also goes to
+  `<LOG_DIR>/<service>/<instance>.log` as JSON, for the Gateway's `GET /api/logs`.
+
+`docker-compose.yaml` does not set `BROKER_GRPC_URL` or `LOG_DIR` yet; sending game-service's calls
+through the broker also needs a Gateway 4.x.
 
 #### Building exam-service / world-service from source
 
