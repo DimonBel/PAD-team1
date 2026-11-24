@@ -74,7 +74,7 @@ Each diagram is also in [`docs/diagrams/`](./docs/diagrams/) as `.png` (for slid
 
 ### Who calls whom
 
-Who calls whom. Every solid arrow is a gRPC call that goes **through the broker**: the caller sends it to the broker with `x-broker-service: <target>`, and the broker picks an instance of the target. Dashed arrows are topics: the publisher names only the topic, and the broker delivers it to whoever subscribed.
+Every solid arrow is a gRPC call that goes **through the broker**: the caller sends it to the broker with `x-broker-service: <target>`, and the broker picks an instance of the target. Dashed arrows are topics: the publisher names only the topic, and the broker delivers it to whoever subscribed.
 
 ```mermaid
 flowchart LR
