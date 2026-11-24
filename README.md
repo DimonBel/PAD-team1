@@ -26,9 +26,49 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 Since Lab 4, the API Gateway is still the single entry point for clients, and the **Message Broker** carries every other hop. Clients call the Gateway, which checks the caller's JWT and hands each `/api/...` request to the broker. Services call each other only through the broker, over **gRPC**, and never name one another for events: they publish to a **topic**, and the broker delivers to every service that subscribed to it. Load balancing, retries and circuit breakers live in the broker, which learns each service's instances, gRPC addresses and topics from **Service Discovery**. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database.
 
-![Architectural Diagram, Lab 3](./docs/diagram_new.jpg)
+### System overview
 
-Who calls whom. Every solid arrow is a gRPC call that goes **through the broker**: the caller sends it to the broker with `x-broker-service: <target>`, and the broker picks an instance of the target. Dashed arrows are topics: the publisher names only the topic, and the broker delivers it to whoever subscribed.
+Every component of the stack and how they connect: the Gateway with its Redis cache, the Message Broker with the saga coordinator, Service Discovery, the eight services and their databases (replicated ones drawn as a stack), the data warehouse and the monitoring.
+
+![System overview](./docs/diagrams/01-system-overview.svg)
+
+> **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)). The Redis cache, the Patroni clusters, `etl-service` with `warehouse-db`, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
+
+### Cache and consistent hashing
+
+The Gateway caches common GET answers and login sessions in three independent Redis nodes. Its own hash ring (160 virtual nodes per node) picks the node for each key, so a node that goes down only moves its own keys to the next node.
+
+![Cache and consistent hashing](./docs/diagrams/03-cache-consistent-hashing.svg)
+
+### Database replication and failover
+
+`player-db`, `game-db`, `zombie-db` and `resource-db` are Patroni clusters: a leader and 2 streaming replicas, one of them synchronous. etcd elects the leader, and HAProxy always sends `:5432` to the leader and `:5433` to the replicas.
+
+![Database replication and failover](./docs/diagrams/04-database-replication.svg)
+
+### Long-running sagas
+
+The two operations that change both `player-db` and `game-db` run as sagas, with the Message Broker as the coordinator: `zombie-steal` and `session-end`. A step that fails is retried, and a refused step undoes the finished ones in reverse.
+
+![Long-running sagas](./docs/diagrams/05-sagas.svg)
+
+### Data warehouse and ETL
+
+`etl-service` reads the eight service databases (read-only, incremental) and loads them into a star schema in `warehouse-db`, which Grafana reads.
+
+![Data warehouse and ETL](./docs/diagrams/06-data-warehouse-etl.svg)
+
+### Observability
+
+Prometheus scrapes metrics, Alloy ships every container's logs to Loki, and Grafana shows both. Every component also writes to the shared log volume the Gateway merges.
+
+![Observability](./docs/diagrams/07-observability.svg)
+
+Each diagram is also in [`docs/diagrams/`](./docs/diagrams/) as `.png` (for slides) and `.excalidraw` (editable at [excalidraw.com](https://excalidraw.com)). Edit `docs/diagrams/diagrams_content.py`, not the exported files, and run `python3 docs/diagrams/build.py` to regenerate all three formats.
+
+### Who calls whom
+
+Every solid arrow is a gRPC call that goes **through the broker**: the caller sends it to the broker with `x-broker-service: <target>`, and the broker picks an instance of the target. Dashed arrows are topics: the publisher names only the topic, and the broker delivers it to whoever subscribed.
 
 ```mermaid
 flowchart LR
@@ -84,6 +124,13 @@ flowchart LR
 The WebSocket carries live events: presence, friends and trades from Player Service, and action progress, zombie attacks and day/night changes from Game Service (see [WebSocket Connection](#websocket-connection)).
 
 <details>
+<summary>Lab 4 diagram, before the cache, replication and sagas</summary>
+
+![Architectural Diagram, Lab 4](./docs/diagram_new.jpg)
+
+</details>
+
+<details>
 <summary>Lab 3 diagram, before the Message Broker</summary>
 
 In Lab 3, the Gateway also routed service-to-service calls over REST and balanced them between instances itself.
@@ -119,8 +166,8 @@ world-service start empty, and their demo data is loaded separately (see
 | --- | --- | --- |
 | base-service | [`cobili/base-service:4.2.0`](https://hub.docker.com/r/cobili/base-service) | Bujor-Cobili Alexandra |
 | crafting-service | [`cobili/crafting-service:4.2.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
-| player-service | [`dimon1/player-service:4.0.1`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
-| game-service | [`dimon1/game-service:4.0.1`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
+| player-service | [`dimon1/player-service:5.0.0`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
+| game-service | [`dimon1/game-service:5.0.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
 | zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | exam-service | [`alexandramihalevschi/exam-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
@@ -192,6 +239,16 @@ them as before.
 
 `docker-compose.yaml` does not set `BROKER_GRPC_URL` or `LOG_DIR` yet; sending game-service's calls
 through the broker also needs a Gateway 4.x.
+
+#### player-service and game-service 5.0.0
+
+Version 5.0.0 of both services adds their side of the long-running sagas. The sagas themselves are run by the Message Broker; see the [sagas diagram](./docs/diagrams/05-sagas.svg).
+
+- **player-service** serves the XP steps over gRPC. `StealXp` takes `min(max, xp)` under a row lock. `AdjustXp` locks the player row and answers a repeated `operation_id` from the XP ledger, so a saga can retry any step safely.
+- **game-service** serves `ApplySteal`, `BeginSessionEnd`, `RevertSessionEnd` and `FinishSession`, each idempotent through a new `saga_operations` table (migrated on start). While a session-end saga runs, the session is `ENDING`: no new actions, steals or cycles.
+- With sagas on, a zombie's XP steal answers `200` with the amount taken, `202` with a `saga_id` while a service is down, or `409 STEAL_FAILED` once the saga has given the XP back.
+
+game-service starts sagas only when `BROKER_URL` is set and `SAGAS` is not `off`. `docker-compose.yaml` sets neither, and this repository's broker has no saga coordinator yet, so the compose runs both services with the direct calls, as in 4.0.1.
 
 #### Building exam-service / world-service from source
 

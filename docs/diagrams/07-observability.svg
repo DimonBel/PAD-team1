@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="920" viewBox="0 0 1940 920" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><marker id="m495057" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#495057"/></marker><marker id="md9480f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#d9480f"/></marker></defs>
+<rect width="1940" height="920" fill="#ffffff"/>
+<text xml:space="preserve" style="white-space:pre" font-size="30" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="40.0" y="55.9">Observability · metrics, logs and alerts</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#495057" text-anchor="start"><tspan x="40.0" y="86.0">Prometheus, Loki and Grafana in the compose (monitoring/), plus the shared log files the Gateway serves for download</tspan></text>
+<rect x="40.0" y="110.0" width="1420.0" height="260.0" rx="14.0" fill="#ffe8cc" fill-opacity="0.35" stroke="#d9480f" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#d9480f" text-anchor="start" font-weight="700"><tspan x="56.0" y="132.1">METRICS · pulled every 5 s</tspan></text>
+<rect x="70.0" y="150.0" width="470.0" height="60.0" rx="10.0" fill="#ffffff" stroke="#d9480f" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="305.0" y="173.8">Message Broker  /metrics</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="305.0" y="195.4">answers by code, latency, retries, breakers, load, sagas</tspan></text>
+<path d="M540.0,180.0 L620.0,180.0" fill="none" stroke="#d9480f" stroke-width="2" stroke-linejoin="round"/>
+<rect x="70.0" y="220.0" width="470.0" height="60.0" rx="10.0" fill="#ffffff" stroke="#d9480f" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="305.0" y="243.8">etl-service  /metrics</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="305.0" y="265.4">runs, rows loaded, orphans</tspan></text>
+<path d="M540.0,250.0 L620.0,250.0" fill="none" stroke="#d9480f" stroke-width="2" stroke-linejoin="round"/>
+<rect x="70.0" y="290.0" width="470.0" height="60.0" rx="10.0" fill="#ffffff" stroke="#d9480f" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="305.0" y="313.8">12 Patroni nodes  :8008/metrics</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="305.0" y="335.4">role, timeline (failovers), replication lag</tspan></text>
+<path d="M540.0,320.0 L620.0,320.0" fill="none" stroke="#d9480f" stroke-width="2" stroke-linejoin="round"/>
+<path d="M620.0,180.0 L620.0,320.0" fill="none" stroke="#d9480f" stroke-width="2" stroke-linejoin="round"/>
+<path d="M620.0,255.0 L760.0,255.0" fill="none" stroke="#d9480f" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#md9480f)"/>
+<rect x="760.0" y="195.0" width="330.0" height="120.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="925.0" y="232.8">Prometheus  :9095</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="925.0" y="256.3">prom/prometheus v3.5</tspan><tspan x="925.0" y="272.6">jobs: message-broker, etl-service,</tspan><tspan x="925.0" y="288.8">patroni, prometheus</tspan></text>
+<rect x="40.0" y="400.0" width="1420.0" height="210.0" rx="14.0" fill="#ffe8cc" fill-opacity="0.35" stroke="#d9480f" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#d9480f" text-anchor="start" font-weight="700"><tspan x="56.0" y="422.1">CONTAINER LOGS · pushed</tspan></text>
+<rect x="70.0" y="450.0" width="470.0" height="110.0" rx="10.0" fill="#ffffff" stroke="#d9480f" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="305.0" y="490.9">Every container's output</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="305.0" y="514.5">JSON log lines with level, service,</tspan><tspan x="305.0" y="530.7">instance and request id</tspan></text>
+<rect x="760.0" y="450.0" width="330.0" height="110.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="925.0" y="490.9">Alloy</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="925.0" y="514.5">finds containers via the Docker socket</tspan><tspan x="925.0" y="530.7">labels: service, container, level</tspan></text>
+<rect x="1160.0" y="450.0" width="270.0" height="110.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1295.0" y="490.9">Loki</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1295.0" y="514.5">log store</tspan><tspan x="1295.0" y="530.7">queried from Grafana</tspan></text>
+<path d="M540.0,505.0 L760.0,505.0" fill="none" stroke="#d9480f" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#md9480f)"/>
+<path d="M1090.0,505.0 L1160.0,505.0" fill="none" stroke="#d9480f" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#md9480f)"/>
+<rect x="1500.0" y="110.0" width="400.0" height="500.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="19" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1514.0" y="139.7">Grafana  :3000</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#495057" text-anchor="start"><tspan x="1514.0" y="164.8">anonymous viewer · admin from .env</tspan><tspan x="1514.0" y="182.3"></tspan><tspan x="1514.0" y="199.8">PAD platform (home dashboard)</tspan><tspan x="1514.0" y="217.3">  · Overview</tspan><tspan x="1514.0" y="234.8">  · Services: where is the bottleneck</tspan><tspan x="1514.0" y="252.3">  · Instances: is the load balanced</tspan><tspan x="1514.0" y="269.8">  · Logs: what happened</tspan><tspan x="1514.0" y="287.3">  · Databases (Patroni replication)</tspan><tspan x="1514.0" y="304.8">  · Sagas (coordinated by the broker)</tspan><tspan x="1514.0" y="322.3"></tspan><tspan x="1514.0" y="339.8">PAD data warehouse</tspan><tspan x="1514.0" y="357.3">  · ETL · Warehouse</tspan><tspan x="1514.0" y="374.8"></tspan><tspan x="1514.0" y="392.3">data sources: Prometheus · Loki ·</tspan><tspan x="1514.0" y="409.8">warehouse-db as dw_reader</tspan></text>
+<path d="M1090.0,255.0 L1500.0,255.0" fill="none" stroke="#d9480f" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#md9480f)"/>
+<path d="M1430.0,505.0 L1500.0,505.0" fill="none" stroke="#d9480f" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#md9480f)"/>
+<rect x="40.0" y="640.0" width="1420.0" height="210.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="56.0" y="662.1">LOG FILES + DOWNLOAD (Lab 4)</tspan></text>
+<rect x="70.0" y="690.0" width="470.0" height="130.0" rx="10.0" fill="#ffffff" stroke="#343a40" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="305.0" y="732.8">Every component (12)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="305.0" y="756.3">writes /var/log/pad/&lt;service&gt;/&lt;instance&gt;.log</tspan><tspan x="305.0" y="772.6">rotated at LOG_FILE_MAX_MB · logs-init prepares</tspan><tspan x="305.0" y="788.8">the volume before anything starts</tspan></text>
+<rect x="640.0" y="690.0" width="330.0" height="130.0" rx="10.0" fill="#e9ecef" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="805.0" y="740.9">logs volume</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="805.0" y="764.5">shared by every container</tspan><tspan x="805.0" y="780.7">files outlive their containers</tspan></text>
+<rect x="1060.0" y="690.0" width="380.0" height="130.0" rx="10.0" fill="#fff3bf" stroke="#e67700" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1250.0" y="732.8">Gateway  GET /api/logs</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1250.0" y="756.3">X-Admin-Key · filters: service, instance,</tspan><tspan x="1250.0" y="772.6">level, since/until, request_id, q</tspan><tspan x="1250.0" y="788.8">→ one merged NDJSON download</tspan></text>
+<path d="M540.0,755.0 L640.0,755.0" fill="none" stroke="#495057" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m495057)"/>
+<path d="M970.0,755.0 L1060.0,755.0" fill="none" stroke="#495057" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m495057)"/>
+<rect x="1500.0" y="690.0" width="400.0" height="130.0" rx="10.0" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1700.0" y="732.8">Service Discovery alerts</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1700.0" y="756.3">instance down · removed · back up</tspan><tspan x="1700.0" y="772.6">→ Discord webhook (when</tspan><tspan x="1700.0" y="788.8">DISCORD_WEBHOOK_URL is set)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="900.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/07-observability.excalidraw (open at excalidraw.com) · state of the repository, November 2026</tspan></text>
+</svg>

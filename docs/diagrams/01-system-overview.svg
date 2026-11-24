@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="1520" viewBox="0 0 1940 1520" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><marker id="m0b7285" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#0b7285"/></marker><marker id="m2f9e44" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#2f9e44"/></marker><marker id="m343a40" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#343a40"/></marker><marker id="m862e9c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#862e9c"/></marker><marker id="m868e96" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#868e96"/></marker><marker id="mc92a2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#c92a2a"/></marker><marker id="me03131" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#e03131"/></marker></defs>
+<rect width="1940" height="1520" fill="#ffffff"/>
+<text xml:space="preserve" style="white-space:pre" font-size="30" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="40.0" y="55.9">In Kahoots with the Undead — System Architecture</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#495057" text-anchor="start"><tspan x="40.0" y="86.0">Docker Compose project pad-team1 · one public entry (API Gateway), one internal bus (Message Broker), 8 domain services, each with its own database</tspan></text>
+<rect x="810.0" y="110.0" width="300.0" height="72.0" rx="10.0" fill="#f1f3f5" stroke="#495057" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="960.0" y="140.1">Client (player)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="960.0" y="163.6">browser · Postman · game client</tspan></text>
+<rect x="40.0" y="215.0" width="500.0" height="185.0" rx="14.0" fill="#ffe3e3" fill-opacity="0.35" stroke="#c92a2a" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#c92a2a" text-anchor="start" font-weight="700"><tspan x="56.0" y="237.1">CACHE · 3 independent Redis nodes</tspan></text>
+<rect x="57.0" y="255.0" width="145.0" height="115.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="129.5" y="291.6">cache-1</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="129.5" y="313.5">Redis 7.4</tspan><tspan x="129.5" y="328.5">64 MB · LRU</tspan><tspan x="129.5" y="343.5">no persistence</tspan></text>
+<rect x="217.0" y="255.0" width="145.0" height="115.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="289.5" y="291.6">cache-2</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="289.5" y="313.5">Redis 7.4</tspan><tspan x="289.5" y="328.5">64 MB · LRU</tspan><tspan x="289.5" y="343.5">no persistence</tspan></text>
+<rect x="377.0" y="255.0" width="145.0" height="115.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="449.5" y="291.6">cache-3</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="449.5" y="313.5">Redis 7.4</tspan><tspan x="449.5" y="328.5">64 MB · LRU</tspan><tspan x="449.5" y="343.5">no persistence</tspan></text>
+<rect x="650.0" y="220.0" width="620.0" height="170.0" rx="10.0" fill="#fff3bf" stroke="#e67700" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="19" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="960.0" y="267.2">API Gateway  :8080</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="960.0" y="291.3">TypeScript/Fastify · the only public entry point</tspan><tspan x="960.0" y="307.6">verifies the JWT · route table · internal routes answer 404</tspan><tspan x="960.0" y="323.8">session cache + logout · GET-answer cache (X-Cache: HIT/MISS)</tspan><tspan x="960.0" y="340.1">consistent-hash ring (160 vnodes per node) over cache-1..3</tspan><tspan x="960.0" y="356.3">WebSocket tickets · GET /api/logs · GET /cache/stats</tspan></text>
+<rect x="1400.0" y="230.0" width="480.0" height="150.0" rx="10.0" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1640.0" y="274.7">Service Discovery  :8500</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1640.0" y="298.2">TypeScript · registry of every running instance</tspan><tspan x="1640.0" y="314.5">url · grpc_url · topics each instance listens to</tspan><tspan x="1640.0" y="330.7">health sweep every 10 s, evicts dead instances</tspan><tspan x="1640.0" y="347.0">optional Discord alerts</tspan></text>
+<path d="M960.0,182.0 L960.0,220.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<rect x="970.0" y="190.0" width="128.8" height="19.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="975.0" y="203.2">HTTPS + player JWT</tspan></text>
+<path d="M650.0,305.0 L540.0,305.0" fill="none" stroke="#c92a2a" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#mc92a2a)" marker-start="url(#mc92a2a)"/>
+<rect x="555.4" y="312.0" width="79.2" height="31.5" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="595.0" y="324.2">sessions +</tspan><tspan x="595.0" y="338.0">GET answers</tspan></text>
+<path d="M1270.0,300.0 L1400.0,300.0" fill="none" stroke="#2f9e44" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m2f9e44)"/>
+<rect x="1291.3" y="306.0" width="87.4" height="31.5" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1335.0" y="318.2">instance list</tspan><tspan x="1335.0" y="332.0">(rollback mode)</tspan></text>
+<rect x="330.0" y="455.0" width="1260.0" height="200.0" rx="10.0" fill="#e5dbff" stroke="#5f3dc4" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="19" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="960.0" y="484.7">Message Broker  ·  REST :8090  ·  gRPC :9090</tspan></text>
+<rect x="350.0" y="500.0" width="230.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="465.0" y="536.3">Service queues</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="465.0" y="557.9">one FIFO queue per service</tspan><tspan x="465.0" y="572.9">REST and gRPC kept apart</tspan></text>
+<rect x="596.0" y="500.0" width="230.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="711.0" y="536.3">Topics (pub/sub)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="711.0" y="557.9">exam.passed, world.wing_unlocked …</tspan><tspan x="711.0" y="572.9">durable · retried · dead-lettered</tspan></text>
+<rect x="842.0" y="500.0" width="230.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="957.0" y="536.3">Load balancing + reroute</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="957.0" y="557.9">least-loaded instance (/health)</tspan><tspan x="957.0" y="572.9">retry on another instance</tspan></text>
+<rect x="1088.0" y="500.0" width="230.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1203.0" y="536.3">Circuit breakers + DLQ</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1203.0" y="557.9">breaker per instance</tspan><tspan x="1203.0" y="572.9">dead letters kept 7 days</tspan></text>
+<rect x="1334.0" y="500.0" width="230.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1449.0" y="536.3">Saga coordinator</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1449.0" y="557.9">zombie-steal · session-end</tspan><tspan x="1449.0" y="572.9">compensation · durable log</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="960.0" y="627.2">TypeScript · one thread per delivery · broker-data volume (SQLite): topic queues, dead letters, saga log</tspan></text>
+<path d="M960.0,390.0 L960.0,455.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<rect x="970.0" y="410.0" width="227.2" height="19.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="975.0" y="423.2">REST · X-Broker-Service · service JWT</tspan></text>
+<path d="M1530.0,455.0 L1530.0,380.0" fill="none" stroke="#2f9e44" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m2f9e44)"/>
+<rect x="1540.0" y="406.0" width="123.5" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="start"><tspan x="1545.0" y="418.2">polls /services, /topics</tspan></text>
+<rect x="40.0" y="700.0" width="1840.0" height="165.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="end" font-weight="700"><tspan x="1864.0" y="722.1">DOMAIN SERVICES · ×N = running instances</tspan></text>
+<rect x="62.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="165.5" y="773.9">Player Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="165.5" y="796.2">accounts · XP · inventory · trades</tspan><tspan x="165.5" y="811.2">Elixir/Phoenix · ×1</tspan><tspan x="165.5" y="826.2">REST :4001 · gRPC · WS</tspan></text>
+<rect x="289.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="392.5" y="773.9">Game Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="392.5" y="796.2">lobbies · sessions · actions</tspan><tspan x="392.5" y="811.2">Elixir/Phoenix · ×1</tspan><tspan x="392.5" y="826.2">REST :4002 · gRPC · WS</tspan></text>
+<rect x="516.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="619.5" y="773.9">Zombie Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="619.5" y="796.2">zombie types · instances · loot</tspan><tspan x="619.5" y="811.2">Ruby/Sinatra · ×2</tspan><tspan x="619.5" y="826.2">REST :4003 · gRPC</tspan></text>
+<rect x="743.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="846.5" y="773.9">Resource Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="846.5" y="796.2">resource points · transfers</tspan><tspan x="846.5" y="811.2">Ruby/Sinatra · ×2</tspan><tspan x="846.5" y="826.2">REST :4006 · gRPC</tspan></text>
+<rect x="970.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1073.5" y="773.9">Exam Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1073.5" y="796.2">courses · exams · grades</tspan><tspan x="1073.5" y="811.2">Elixir/Phoenix · ×2</tspan><tspan x="1073.5" y="826.2">REST :4005 · gRPC</tspan></text>
+<rect x="1197.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1300.5" y="773.9">World Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1300.5" y="796.2">map · zones · rooms</tspan><tspan x="1300.5" y="811.2">Elixir/Phoenix · ×2</tspan><tspan x="1300.5" y="826.2">REST :4004 · gRPC</tspan></text>
+<rect x="1424.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1527.5" y="773.9">Base Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1527.5" y="796.2">bases · upgrades · Kiki</tspan><tspan x="1527.5" y="811.2">Ruby/Sinatra · ×2</tspan><tspan x="1527.5" y="826.2">REST :4007</tspan></text>
+<rect x="1651.0" y="742.0" width="207.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1754.5" y="773.9">Crafting Service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1754.5" y="796.2">recipes · craft jobs</tspan><tspan x="1754.5" y="811.2">Ruby/Sinatra · ×2</tspan><tspan x="1754.5" y="826.2">REST :4008 · gRPC</tspan></text>
+<path d="M960.0,655.0 L960.0,700.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)" marker-start="url(#m343a40)"/>
+<rect x="970.0" y="666.0" width="475.2" height="19.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="975.0" y="679.2">every call between services goes through the broker too (REST, gRPC, topic events)</tspan></text>
+<path d="M810.0,146.0 L22.0,146.0 L22.0,680.0 L165.0,680.0 L165.0,742.0" fill="none" stroke="#e03131" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#me03131)"/>
+<path d="M165.0,680.0 L392.0,680.0 L392.0,742.0" fill="none" stroke="#e03131" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#me03131)"/>
+<rect x="142.0" y="126.0" width="545.9" height="19.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#e03131" text-anchor="middle"><tspan x="415.0" y="139.2">WebSocket · 30 s ticket from the Gateway, then straight to Player / Game (not through the broker)</tspan></text>
+<path d="M1880.0,790.0 L1905.0,790.0 L1905.0,305.0 L1880.0,305.0" fill="none" stroke="#2f9e44" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m2f9e44)"/>
+<rect x="1814.2" y="528.0" width="83.8" height="59.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#2f9e44" text-anchor="end"><tspan x="1893.0" y="540.2">every instance</tspan><tspan x="1893.0" y="554.0">registers itself</tspan><tspan x="1893.0" y="567.7">(url, grpc_url,</tspan><tspan x="1893.0" y="581.5">topics)</tspan></text>
+<rect x="40.0" y="885.0" width="1840.0" height="215.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="56.0" y="907.1"></tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="end" font-weight="700"><tspan x="1864.0" y="1084.1">DATA · one PostgreSQL 16 database per service, no service reads another's</tspan></text>
+<rect x="76.0" y="916.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="69.0" y="923.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="62.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="165.5" y="962.9">player-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="165.5" y="985.2">Patroni: leader + 2 replicas</tspan><tspan x="165.5" y="1000.2">HAProxy :5432 RW · :5433 RO</tspan></text>
+<path d="M165.5,847.0 L165.5,914.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<path d="M165.5,1022.0 L165.5,1045.0" fill="none" stroke="#868e96" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<rect x="303.0" y="916.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="296.0" y="923.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="289.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="392.5" y="962.9">game-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="392.5" y="985.2">Patroni: leader + 2 replicas</tspan><tspan x="392.5" y="1000.2">HAProxy :5432 RW · :5433 RO</tspan></text>
+<path d="M392.5,847.0 L392.5,914.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<path d="M392.5,1022.0 L392.5,1045.0" fill="none" stroke="#868e96" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<rect x="530.0" y="916.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="523.0" y="923.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="516.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="619.5" y="962.9">zombie-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="619.5" y="985.2">Patroni: leader + 2 replicas</tspan><tspan x="619.5" y="1000.2">HAProxy :5432 RW · :5433 RO</tspan></text>
+<path d="M619.5,847.0 L619.5,914.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<path d="M619.5,1022.0 L619.5,1045.0" fill="none" stroke="#868e96" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<rect x="757.0" y="916.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="750.0" y="923.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="743.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="846.5" y="962.9">resource-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="846.5" y="985.2">Patroni: leader + 2 replicas</tspan><tspan x="846.5" y="1000.2">HAProxy :5432 RW · :5433 RO</tspan></text>
+<path d="M846.5,847.0 L846.5,914.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<path d="M846.5,1022.0 L846.5,1045.0" fill="none" stroke="#868e96" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<rect x="970.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1073.5" y="962.9">exam-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1073.5" y="985.2">PostgreSQL 16</tspan><tspan x="1073.5" y="1000.2">single node, no replica</tspan></text>
+<path d="M1073.5,847.0 L1073.5,928.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="1197.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1300.5" y="962.9">world-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1300.5" y="985.2">PostgreSQL 16</tspan><tspan x="1300.5" y="1000.2">single node, no replica</tspan></text>
+<path d="M1300.5,847.0 L1300.5,928.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="1424.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1527.5" y="962.9">base-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1527.5" y="985.2">PostgreSQL 16</tspan><tspan x="1527.5" y="1000.2">single node, no replica</tspan></text>
+<path d="M1527.5,847.0 L1527.5,928.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="1651.0" y="930.0" width="207.0" height="92.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1754.5" y="962.9">crafting-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1754.5" y="985.2">PostgreSQL 16</tspan><tspan x="1754.5" y="1000.2">single node, no replica</tspan></text>
+<path d="M1754.5,847.0 L1754.5,928.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="62.0" y="1045.0" width="888.0" height="40.0" rx="10.0" fill="#e9ecef" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="506.0" y="1069.0">etcd ×3  ·  leader election for the 4 Patroni clusters (quorum 2 of 3)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="end"><tspan x="1864.0" y="1057.2">exam-db · world-db · base-db · crafting-db stay single-node</tspan></text>
+<rect x="40.0" y="1150.0" width="900.0" height="235.0" rx="14.0" fill="#f3d9fa" fill-opacity="0.35" stroke="#862e9c" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#862e9c" text-anchor="start" font-weight="700"><tspan x="56.0" y="1172.1">ANALYTICS · data warehouse</tspan></text>
+<path d="M270.0,1100.0 L270.0,1190.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="280.0" y="1110.0" width="212.5" height="31.5" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="start"><tspan x="285.0" y="1122.2">reads all 8 databases, read-only</tspan><tspan x="285.0" y="1136.0">(replicated ones from the :5433 replicas)</tspan></text>
+<rect x="70.0" y="1190.0" width="400.0" height="130.0" rx="10.0" fill="#f3d9fa" stroke="#862e9c" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="270.0" y="1232.8">etl-service  :8100</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="270.0" y="1256.3">TypeScript · every 60 s and on POST /v1/runs</tspan><tspan x="270.0" y="1272.6">extract → transform → load, incremental</tspan><tspan x="270.0" y="1288.8">read-only sources · one run at a time</tspan></text>
+<rect x="520.0" y="1190.0" width="390.0" height="130.0" rx="10.0" fill="#f3d9fa" stroke="#862e9c" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="715.0" y="1232.8">warehouse-db  :5440</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="715.0" y="1256.3">PostgreSQL 16 · star schema</tspan><tspan x="715.0" y="1272.6">dw.dim_* · dw.fact_* · dw.v_* views</tspan><tspan x="715.0" y="1288.8">staging.rows · etl.* (runs, watermarks)</tspan></text>
+<path d="M470.0,1255.0 L520.0,1255.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="980.0" y="1150.0" width="900.0" height="235.0" rx="14.0" fill="#ffe8cc" fill-opacity="0.35" stroke="#d9480f" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#d9480f" text-anchor="start" font-weight="700"><tspan x="996.0" y="1172.1">OBSERVABILITY</tspan></text>
+<rect x="1000.0" y="1190.0" width="190.0" height="130.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1095.0" y="1232.8">Alloy</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1095.0" y="1256.3">reads every</tspan><tspan x="1095.0" y="1272.6">container's logs</tspan><tspan x="1095.0" y="1288.8">(Docker socket)</tspan></text>
+<rect x="1220.0" y="1190.0" width="190.0" height="130.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1315.0" y="1232.8">Loki</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1315.0" y="1256.3">log store,</tspan><tspan x="1315.0" y="1272.6">labelled by service</tspan><tspan x="1315.0" y="1288.8">and container</tspan></text>
+<rect x="1440.0" y="1190.0" width="200.0" height="130.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1540.0" y="1232.5">Prometheus  :9095</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1540.0" y="1255.7">scrapes every 5 s:</tspan><tspan x="1540.0" y="1272.0">broker · etl-service</tspan><tspan x="1540.0" y="1288.2">12 Patroni nodes</tspan></text>
+<rect x="1670.0" y="1190.0" width="190.0" height="130.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1765.0" y="1232.5">Grafana  :3000</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1765.0" y="1255.7">PAD platform</tspan><tspan x="1765.0" y="1272.0">PAD data warehouse</tspan><tspan x="1765.0" y="1288.2">dashboards</tspan></text>
+<path d="M1190.0,1255.0 L1220.0,1255.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M1640.0,1255.0 L1670.0,1255.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M1315.0,1320.0 L1315.0,1343.0 L1745.0,1343.0 L1745.0,1320.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M715.0,1320.0 L715.0,1364.0 L1805.0,1364.0 L1805.0,1320.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m862e9c)"/>
+<rect x="735.8" y="1355.0" width="218.3" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="845.0" y="1367.2">Grafana reads it as dw_reader (read-only)</tspan></text>
+<rect x="1189.5" y="1230.0" width="30.9" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1205.0" y="1242.2">logs</tspan></text>
+<rect x="1631.3" y="1230.0" width="47.4" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1655.0" y="1242.2">metrics</tspan></text>
+<rect x="1514.5" y="1334.0" width="30.9" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1530.0" y="1346.2">logs</tspan></text>
+<rect x="40.0" y="1405.0" width="1840.0" height="46.0" rx="10.0" fill="#ffffff" stroke="#d9480f" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="960.0" y="1432.3">Shared logs volume  /var/log/pad/&lt;service&gt;/&lt;instance&gt;.log  —  written by every component; the Gateway merges it into one download: GET /api/logs (admin key)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="1500.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/01-system-overview.excalidraw (open at excalidraw.com) · state of the repository, November 2026</tspan></text>
+</svg>
