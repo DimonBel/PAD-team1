@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="1140" viewBox="0 0 1940 1140" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><marker id="m0b7285" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#0b7285"/></marker><marker id="m1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#1e1e1e"/></marker><marker id="m343a40" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#343a40"/></marker><marker id="m862e9c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#862e9c"/></marker><marker id="m868e96" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#868e96"/></marker></defs>
+<rect width="1940" height="1140" fill="#ffffff"/>
+<text xml:space="preserve" style="white-space:pre" font-size="30" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="40.0" y="55.9">Database replication and automatic failover</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#495057" text-anchor="start"><tspan x="40.0" y="86.0">player-db, game-db, zombie-db and resource-db are each a Patroni cluster of 3 PostgreSQL 16 nodes (player-db shown); see db-replication/README.md</tspan></text>
+<rect x="380.0" y="110.0" width="380.0" height="80.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="570.0" y="144.1">player-service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="570.0" y="167.6">DATABASE_URL = player-db:5432 (unchanged)</tspan></text>
+<rect x="900.0" y="110.0" width="360.0" height="80.0" rx="10.0" fill="#f3d9fa" stroke="#862e9c" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1080.0" y="144.1">etl-service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1080.0" y="167.6">reads player-db:5433 (replicas)</tspan></text>
+<rect x="300.0" y="240.0" width="1120.0" height="150.0" rx="14.0" fill="#e9ecef" fill-opacity="0.35" stroke="#343a40" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#343a40" text-anchor="start" font-weight="700"><tspan x="316.0" y="262.1">player-db  =  HAProxy ×2  (the hostname the services already used)</tspan></text>
+<rect x="320.0" y="280.0" width="530.0" height="92.0" rx="10.0" fill="#e9ecef" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="585.0" y="312.6">HAProxy 3.0  #1</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="585.0" y="334.5">:5432 → current leader (read-write)  ·  :5433 → replicas (read-only)</tspan><tspan x="585.0" y="349.5">checks every node's Patroni REST API every 2 s · stats :8404</tspan></text>
+<rect x="870.0" y="280.0" width="530.0" height="92.0" rx="10.0" fill="#e9ecef" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1135.0" y="312.6">HAProxy 3.0  #2</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1135.0" y="334.5">:5432 → current leader (read-write)  ·  :5433 → replicas (read-only)</tspan><tspan x="1135.0" y="349.5">checks every node's Patroni REST API every 2 s · stats :8404</tspan></text>
+<path d="M570.0,190.0 L570.0,240.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<rect x="580.0" y="203.0" width="122.4" height="19.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="585.0" y="216.2">:5432 reads + writes</tspan></text>
+<path d="M1080.0,190.0 L1080.0,240.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="1090.0" y="203.0" width="74.0" height="19.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1095.0" y="216.2">:5433 reads</tspan></text>
+<rect x="300.0" y="470.0" width="320.0" height="170.0" rx="10.0" fill="#c5f6fa" stroke="#2b8a3e" stroke-width="2.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="460.0" y="524.7">player-db-1</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="460.0" y="548.2">PostgreSQL 16 + Patroni 4.0.11</tspan><tspan x="460.0" y="564.5">accepts every write</tspan><tspan x="460.0" y="580.7">GET :8008/primary → 200</tspan><tspan x="460.0" y="597.0">holds the leader key in etcd</tspan></text>
+<rect x="546.0" y="459.0" width="64.0" height="21.0" rx="10.5" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#2b8a3e" text-anchor="middle" font-weight="700"><tspan x="578.0" y="474.2">LEADER</tspan></text>
+<path d="M460.0,390.0 L460.0,470.0" fill="none" stroke="#1e1e1e" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m1e1e1e)"/>
+<rect x="467.0" y="416.0" width="37.4" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="start"><tspan x="472.0" y="428.2">:5432</tspan></text>
+<rect x="700.0" y="470.0" width="320.0" height="170.0" rx="10.0" fill="#c5f6fa" stroke="#e67700" stroke-width="2.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="860.0" y="532.8">player-db-2</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="860.0" y="556.3">every commit waits for its WAL</tspan><tspan x="860.0" y="572.6">first in line on failover</tspan><tspan x="860.0" y="588.8">GET :8008/replica → 200</tspan></text>
+<rect x="902.2" y="459.0" width="107.8" height="21.0" rx="10.5" fill="#fff3bf" stroke="#e67700" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#e67700" text-anchor="middle" font-weight="700"><tspan x="956.1" y="474.2">SYNC STANDBY</tspan></text>
+<path d="M860.0,390.0 L860.0,470.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m862e9c)"/>
+<rect x="867.0" y="416.0" width="37.4" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="start"><tspan x="872.0" y="428.2">:5433</tspan></text>
+<rect x="1100.0" y="470.0" width="320.0" height="170.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1260.0" y="532.8">player-db-3</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1260.0" y="556.3">streams WAL, may lag a little</tspan><tspan x="1260.0" y="572.6">skipped on failover if &gt; 1 MB behind</tspan><tspan x="1260.0" y="588.8">GET :8008/replica → 200</tspan></text>
+<rect x="1298.4" y="459.0" width="111.6" height="21.0" rx="10.5" fill="#e9ecef" stroke="#343a40" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#343a40" text-anchor="middle" font-weight="700"><tspan x="1354.2" y="474.2">ASYNC REPLICA</tspan></text>
+<path d="M1260.0,390.0 L1260.0,470.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m862e9c)"/>
+<rect x="1267.0" y="416.0" width="37.4" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="start"><tspan x="1272.0" y="428.2">:5433</tspan></text>
+<path d="M620.0,555.0 L700.0,555.0" fill="none" stroke="#0b7285" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="642.8" y="518.0" width="34.4" height="31.5" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="660.0" y="530.2">sync</tspan><tspan x="660.0" y="544.0">WAL</tspan></text>
+<path d="M460.0,640.0 L460.0,690.0 L1260.0,690.0 L1260.0,640.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m0b7285)"/>
+<rect x="772.6" y="681.0" width="174.8" height="19.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="860.0" y="694.2">asynchronous WAL streaming</tspan></text>
+<rect x="1500.0" y="240.0" width="400.0" height="450.0" rx="14.0" fill="#e9ecef" fill-opacity="0.35" stroke="#343a40" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#343a40" text-anchor="start" font-weight="700"><tspan x="1516.0" y="262.1">etcd ×3 · quorum 2 of 3</tspan></text>
+<rect x="1530.0" y="285.0" width="340.0" height="68.0" rx="10.0" fill="#e9ecef" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1700.0" y="312.4">etcd-1</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1700.0" y="335.3">etcd v3.5 · :2379</tspan></text>
+<rect x="1530.0" y="370.0" width="340.0" height="68.0" rx="10.0" fill="#e9ecef" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1700.0" y="397.4">etcd-2</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1700.0" y="420.3">etcd v3.5 · :2379</tspan></text>
+<rect x="1530.0" y="455.0" width="340.0" height="68.0" rx="10.0" fill="#e9ecef" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1700.0" y="482.4">etcd-3</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1700.0" y="505.3">etcd v3.5 · :2379</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1530.0" y="559.2">one scope per cluster:</tspan><tspan x="1530.0" y="574.2">player · game · zombie · resource</tspan><tspan x="1530.0" y="589.2"></tspan><tspan x="1530.0" y="604.2">leader key TTL 20 s,</tspan><tspan x="1530.0" y="619.2">renewed every 5 s (loop_wait)</tspan></text>
+<path d="M1420.0,555.0 L1500.0,555.0" fill="none" stroke="#868e96" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m868e96)" marker-start="url(#m868e96)"/>
+<rect x="1414.6" y="573.0" width="90.9" height="31.5" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1460.0" y="585.2">every node:</tspan><tspan x="1460.0" y="599.0">lock + heartbeat</tspan></text>
+<rect x="40.0" y="740.0" width="1250.0" height="330.0" rx="14.0" fill="#c5f6fa" fill-opacity="0.35" stroke="#0b7285" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#0b7285" text-anchor="start" font-weight="700"><tspan x="56.0" y="762.1">AUTOMATIC FAILOVER · about 20–30 s · no acknowledged write is lost</tspan></text>
+<rect x="60.0" y="790.0" width="220.0" height="150.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="170.0" y="850.3">1  Leader stops</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="170.0" y="873.2">player-db-1 crashes</tspan><tspan x="170.0" y="889.5">or is stopped</tspan></text>
+<rect x="305.0" y="790.0" width="220.0" height="150.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="415.0" y="850.3">2  Leader key expires</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="415.0" y="873.2">it is not renewed and</tspan><tspan x="415.0" y="889.5">times out (ttl 20 s)</tspan></text>
+<path d="M280.0,865.0 L305.0,865.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="550.0" y="790.0" width="220.0" height="150.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="660.0" y="842.2">3  Standby promoted</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="660.0" y="865.1">player-db-2 takes the key;</tspan><tspan x="660.0" y="881.3">replicas &gt; 1 MB behind</tspan><tspan x="660.0" y="897.6">are never promoted</tspan></text>
+<path d="M525.0,865.0 L550.0,865.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="795.0" y="790.0" width="220.0" height="150.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="905.0" y="842.2">4  Traffic follows</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="905.0" y="865.1">HAProxy sees /primary on</tspan><tspan x="905.0" y="881.3">db-2 and cuts old sessions;</tspan><tspan x="905.0" y="897.6">Ecto pools reconnect</tspan></text>
+<path d="M770.0,865.0 L795.0,865.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<rect x="1040.0" y="790.0" width="220.0" height="150.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1150.0" y="850.3">5  Old leader rejoins</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1150.0" y="873.2">pg_rewind turns it into</tspan><tspan x="1150.0" y="889.5">a replica of the new leader</tspan></text>
+<path d="M1015.0,865.0 L1040.0,865.0" fill="none" stroke="#0b7285" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m0b7285)"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="60.0" y="972.1">synchronous_mode: a commit is acknowledged only after the sync standby has it, so the promoted node</tspan><tspan x="60.0" y="988.3">has every acknowledged write. Tested under load by deploy/db-ha-e2e.test.mjs. The services restart</tspan><tspan x="60.0" y="1004.6">on their own (restart: unless-stopped) if a failover catches their start-up migration.</tspan></text>
+<rect x="1330.0" y="740.0" width="570.0" height="330.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="1346.0" y="762.1">WHICH DATABASES ARE REPLICATED</tspan></text>
+<rect x="1350.0" y="780.0" width="530.0" height="28.0" rx="0.0" fill="#e9ecef" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="797.7">Database</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1520.0" y="797.7">Setup</tspan></text>
+<rect x="1350.0" y="808.0" width="530.0" height="28.0" rx="0.0" fill="#d3f9d8" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="825.7">player-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="825.7">Patroni ×3 + HAProxy ×2</tspan></text>
+<rect x="1350.0" y="836.0" width="530.0" height="28.0" rx="0.0" fill="#d3f9d8" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="853.7">game-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="853.7">Patroni ×3 + HAProxy ×2</tspan></text>
+<rect x="1350.0" y="864.0" width="530.0" height="28.0" rx="0.0" fill="#d3f9d8" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="881.7">zombie-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="881.7">Patroni ×3 + HAProxy ×2</tspan></text>
+<rect x="1350.0" y="892.0" width="530.0" height="28.0" rx="0.0" fill="#d3f9d8" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="909.7">resource-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="909.7">Patroni ×3 + HAProxy ×2</tspan></text>
+<rect x="1350.0" y="920.0" width="530.0" height="28.0" rx="0.0" fill="#fff3bf" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="937.7">exam-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="937.7">single PostgreSQL 16, no replica</tspan></text>
+<rect x="1350.0" y="948.0" width="530.0" height="28.0" rx="0.0" fill="#fff3bf" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="965.7">world-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="965.7">single PostgreSQL 16, no replica</tspan></text>
+<rect x="1350.0" y="976.0" width="530.0" height="28.0" rx="0.0" fill="#fff3bf" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="993.7">base-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="993.7">single PostgreSQL 16, no replica</tspan></text>
+<rect x="1350.0" y="1004.0" width="530.0" height="28.0" rx="0.0" fill="#fff3bf" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1360.0" y="1021.7">crafting-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1520.0" y="1021.7">single PostgreSQL 16, no replica</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1350.0" y="1051.2">Prometheus scrapes the 12 Patroni nodes → Grafana 'Databases' row</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="1120.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/04-database-replication.excalidraw (open at excalidraw.com) · state of the repository for Lab 5, November 2026</tspan></text>
+</svg>
