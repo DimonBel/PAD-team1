@@ -34,12 +34,6 @@ Every component of the stack and how they connect: the Gateway with its Redis ca
 
 > **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)). The Redis cache, the Patroni clusters, `etl-service` with `warehouse-db`, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
 
-### Communication
-
-How a request travels: REST from the client to the Gateway, the broker in front of every service, gRPC between services, topics for events, and the WebSocket that goes straight to Player and Game Service with a ticket.
-
-![Communication between components](./docs/diagrams/02-communication.svg)
-
 ### Cache and consistent hashing
 
 The Gateway caches common GET answers and login sessions in three independent Redis nodes. Its own hash ring (160 virtual nodes per node) picks the node for each key, so a node that goes down only moves its own keys to the next node.
