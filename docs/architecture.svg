@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="1650" viewBox="0 0 1940 1650" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="1520" viewBox="0 0 1940 1520" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
 <defs><marker id="m0b7285" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#0b7285"/></marker><marker id="m2f9e44" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#2f9e44"/></marker><marker id="m343a40" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#343a40"/></marker><marker id="m862e9c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#862e9c"/></marker><marker id="m868e96" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#868e96"/></marker><marker id="mc92a2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#c92a2a"/></marker><marker id="me03131" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#e03131"/></marker></defs>
-<rect width="1940" height="1650" fill="#ffffff"/>
+<rect width="1940" height="1520" fill="#ffffff"/>
 <text xml:space="preserve" style="white-space:pre" font-size="30" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="40.0" y="55.9">In Kahoots with the Undead — System Architecture</tspan></text>
 <text xml:space="preserve" style="white-space:pre" font-size="15" fill="#495057" text-anchor="start"><tspan x="40.0" y="86.0">Lab 5 · Docker Compose project pad-team1 · one public entry (API Gateway), one internal bus (Message Broker), 8 domain services, each with its own database</tspan></text>
 <rect x="810.0" y="110.0" width="300.0" height="72.0" rx="10.0" fill="#f1f3f5" stroke="#495057" stroke-width="2.0"/>
@@ -176,27 +176,13 @@
 <path d="M715.0,1320.0 L715.0,1364.0 L1805.0,1364.0 L1805.0,1320.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m862e9c)"/>
 <rect x="735.8" y="1355.0" width="218.3" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
 <text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="845.0" y="1367.2">Grafana reads it as dw_reader (read-only)</tspan></text>
+<rect x="1189.5" y="1230.0" width="30.9" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1205.0" y="1242.2">logs</tspan></text>
+<rect x="1631.3" y="1230.0" width="47.4" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1655.0" y="1242.2">metrics</tspan></text>
+<rect x="1514.5" y="1334.0" width="30.9" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1530.0" y="1346.2">logs</tspan></text>
 <rect x="40.0" y="1405.0" width="1840.0" height="46.0" rx="10.0" fill="#ffffff" stroke="#d9480f" stroke-width="1.5"/>
 <text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="960.0" y="1432.3">Shared logs volume  /var/log/pad/&lt;service&gt;/&lt;instance&gt;.log  —  written by every component; the Gateway merges it into one download: GET /api/logs (admin key)</tspan></text>
-<rect x="40.0" y="1478.0" width="1840.0" height="104.0" rx="10.0" fill="#ffffff" stroke="#dee2e6" stroke-width="1.5"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="54.0" y="1500.1">Legend</tspan></text>
-<path d="M54.0,1524.0 L90.0,1524.0" fill="none" stroke="#343a40" stroke-width="2" stroke-linejoin="round" marker-end="url(#m343a40)"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="100.0" y="1528.1">request / call</tspan></text>
-<path d="M509.0,1524.0 L545.0,1524.0" fill="none" stroke="#e03131" stroke-width="2" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#me03131)"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="555.0" y="1528.1">WebSocket (direct)</tspan></text>
-<path d="M964.0,1524.0 L1000.0,1524.0" fill="none" stroke="#2f9e44" stroke-width="2" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m2f9e44)"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="1010.0" y="1528.1">registration / discovery</tspan></text>
-<path d="M1419.0,1524.0 L1455.0,1524.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="1465.0" y="1528.1">data flow (ETL, metrics, logs)</tspan></text>
-<rect x="62.0" y="1540.0" width="30.0" height="18.0" rx="4.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1"/>
-<rect x="58.0" y="1544.0" width="30.0" height="18.0" rx="4.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1"/>
-<rect x="54.0" y="1548.0" width="30.0" height="18.0" rx="4.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="100.0" y="1558.1">replicated database (Patroni ×3)</tspan></text>
-<rect x="509.0" y="1544.0" width="34.0" height="20.0" rx="5.0" fill="#e5dbff" stroke="#5f3dc4" stroke-width="1.5"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="555.0" y="1558.1">messaging</tspan></text>
-<rect x="964.0" y="1544.0" width="34.0" height="20.0" rx="5.0" fill="#d0ebff" stroke="#1864ab" stroke-width="1.5"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="1010.0" y="1558.1">domain service</tspan></text>
-<rect x="1419.0" y="1544.0" width="34.0" height="20.0" rx="5.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="1.5"/>
-<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start"><tspan x="1465.0" y="1558.1">cache</tspan></text>
-<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="1630.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/01-system-overview.excalidraw (open at excalidraw.com) · state of the repository for Lab 5, November 2026</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="1500.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/01-system-overview.excalidraw (open at excalidraw.com) · state of the repository for Lab 5, November 2026</tspan></text>
 </svg>

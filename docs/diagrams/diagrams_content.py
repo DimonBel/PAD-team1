@@ -33,7 +33,7 @@ def chip(d, x, y, w, h, title, body, kind="broker", badge=None, title_size=14, b
 # ====================================================================== 1. overview
 
 def overview() -> Diagram:
-    d = Diagram("01-system-overview", 1940, 1650,
+    d = Diagram("01-system-overview", 1940, 1520,
                 "In Kahoots with the Undead — System Architecture",
                 "Lab 5 · Docker Compose project pad-team1 · one public entry (API Gateway), one internal "
                 "bus (Message Broker), 8 domain services, each with its own database")
@@ -163,22 +163,15 @@ def overview() -> Diagram:
     d.arrow([(1315, 1320), (1315, 1343), (1745, 1343), (1745, 1320)], color=ARROWS["data"])
     d.arrow([(715, 1320), (715, 1364), (1805, 1364), (1805, 1320)], color=ARROWS["data"], dashed=True)
     d.label(845, 1357, "Grafana reads it as dw_reader (read-only)", size=11)
+    d.label(1205, 1232, "logs", size=11)
+    d.label(1655, 1232, "metrics", size=11)
+    d.label(1530, 1336, "logs", size=11)
 
     # shared logs
     d.box(40, 1405, 1840, 46, "note", "Shared logs volume  /var/log/pad/<service>/<instance>.log  —  written by "
           "every component; the Gateway merges it into one download: GET /api/logs (admin key)", title_size=14,
           stroke=KINDS["observe"][1], sw=1.5)
 
-    d.legend(40, 1478, [
-        ("arrow", ARROWS["request"], False, "request / call"),
-        ("arrow", ARROWS["ws"], True, "WebSocket (direct)"),
-        ("arrow", ARROWS["discovery"], True, "registration / discovery"),
-        ("arrow", ARROWS["data"], False, "data flow (ETL, metrics, logs)"),
-        ("stack", "db", "replicated database (Patroni ×3)"),
-        ("box", "broker", "messaging"),
-        ("box", "service", "domain service"),
-        ("box", "cache", "cache"),
-    ], cols=4, col_w=455)
     d.footer(FOOTER.format(name=d.name))
     return d
 

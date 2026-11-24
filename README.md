@@ -26,23 +26,53 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 Since Lab 4, the API Gateway is still the single entry point for clients, and the **Message Broker** carries every other hop. Clients call the Gateway, which checks the caller's JWT and hands each `/api/...` request to the broker. Services call each other only through the broker, over **gRPC**, and never name one another for events: they publish to a **topic**, and the broker delivers to every service that subscribed to it. Load balancing, retries and circuit breakers live in the broker, which learns each service's instances, gRPC addresses and topics from **Service Discovery**. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database.
 
-![Architectural Diagram, Lab 5](./docs/diagrams/01-system-overview.svg)
+### System overview
 
-Lab 5 adds a cache, database replication, a data warehouse and long-running sagas around that core. Each part has its own diagram in [`docs/diagrams/`](./docs/diagrams/):
+Every component of the stack and how they connect: the Gateway with its Redis cache, the Message Broker with the saga coordinator, Service Discovery, the eight services and their databases (replicated ones drawn as a stack), the data warehouse and the monitoring.
 
-| Diagram | What it shows |
-| --- | --- |
-| [System overview](./docs/diagrams/01-system-overview.svg) | Every component of the stack and how they connect (above) |
-| [Communication](./docs/diagrams/02-communication.svg) | REST, gRPC, topics and WebSockets, hop by hop through the Gateway and the broker |
-| [Cache and consistent hashing](./docs/diagrams/03-cache-consistent-hashing.svg) | The Gateway's Redis cache over `cache-1..3`, the hash ring and what happens when a node goes down |
-| [Database replication](./docs/diagrams/04-database-replication.svg) | Patroni clusters (leader + 2 replicas), etcd, HAProxy `:5432` RW / `:5433` RO, failover |
-| [Sagas](./docs/diagrams/05-sagas.svg) | `zombie-steal` and `session-end`, their compensations, the saga states and idempotency |
-| [Data warehouse and ETL](./docs/diagrams/06-data-warehouse-etl.svg) | `etl-service` extracting from the 8 databases into the `warehouse-db` star schema |
-| [Observability](./docs/diagrams/07-observability.svg) | Prometheus, Loki, Alloy and Grafana, and the shared log files |
-
-Each diagram is also there as `.png` (for slides) and `.excalidraw` (editable at [excalidraw.com](https://excalidraw.com)). Edit `docs/diagrams/diagrams_content.py`, not the exported files, and run `python3 docs/diagrams/build.py` to regenerate all three formats.
+![System overview, Lab 5](./docs/diagrams/01-system-overview.svg)
 
 > **Where the Lab 5 code lives.** The diagrams show the whole Lab 5 stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)). The Redis cache, the Patroni clusters, `etl-service` with `warehouse-db`, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
+
+### Communication
+
+How a request travels: REST from the client to the Gateway, the broker in front of every service, gRPC between services, topics for events, and the WebSocket that goes straight to Player and Game Service with a ticket.
+
+![Communication between components](./docs/diagrams/02-communication.svg)
+
+### Lab 5 · Cache and consistent hashing
+
+The Gateway caches common GET answers and login sessions in three independent Redis nodes. Its own hash ring (160 virtual nodes per node) picks the node for each key, so a node that goes down only moves its own keys to the next node.
+
+![Cache and consistent hashing](./docs/diagrams/03-cache-consistent-hashing.svg)
+
+### Lab 5 · Database replication and failover
+
+`player-db`, `game-db`, `zombie-db` and `resource-db` are Patroni clusters: a leader and 2 streaming replicas, one of them synchronous. etcd elects the leader, and HAProxy always sends `:5432` to the leader and `:5433` to the replicas.
+
+![Database replication and failover](./docs/diagrams/04-database-replication.svg)
+
+### Lab 5 · Long-running sagas
+
+The two operations that change both `player-db` and `game-db` run as sagas, with the Message Broker as the coordinator: `zombie-steal` and `session-end`. A step that fails is retried, and a refused step undoes the finished ones in reverse.
+
+![Long-running sagas](./docs/diagrams/05-sagas.svg)
+
+### Lab 5 · Data warehouse and ETL
+
+`etl-service` reads the eight service databases (read-only, incremental) and loads them into a star schema in `warehouse-db`, which Grafana reads.
+
+![Data warehouse and ETL](./docs/diagrams/06-data-warehouse-etl.svg)
+
+### Observability
+
+Prometheus scrapes metrics, Alloy ships every container's logs to Loki, and Grafana shows both. Every component also writes to the shared log volume the Gateway merges.
+
+![Observability](./docs/diagrams/07-observability.svg)
+
+Each diagram is also in [`docs/diagrams/`](./docs/diagrams/) as `.png` (for slides) and `.excalidraw` (editable at [excalidraw.com](https://excalidraw.com)). Edit `docs/diagrams/diagrams_content.py`, not the exported files, and run `python3 docs/diagrams/build.py` to regenerate all three formats.
+
+### Who calls whom
 
 Who calls whom. Every solid arrow is a gRPC call that goes **through the broker**: the caller sends it to the broker with `x-broker-service: <target>`, and the broker picks an instance of the target. Dashed arrows are topics: the publisher names only the topic, and the broker delivers it to whoever subscribed.
 
