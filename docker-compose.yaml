@@ -825,10 +825,10 @@ services:
 
   # ---------------------------------------------------------------- message-broker
 
-  # Lab 4: the Message Broker (MessageBroker-team1, 4.1.0). It owns Gateway -> service and
+  # Lab 4: the Message Broker (MessageBroker-team1, 5.0.0). It owns Gateway -> service and
   # service -> service delivery: per-service queues, load balancing, retries, circuit breakers,
-  # gRPC on 9090, topics and the dead letter channel. Built from the submodule, since its image
-  # isn't on Docker Hub yet.
+  # gRPC on 9090, topics, the dead letter channel and, since 5.0.0, the saga coordinator. Built
+  # from the submodule, the same code as the published dimon1/message-broker:5.0.0.
   #
   # Nothing is routed through it yet: the services and the Gateway use it once BROKER_URL and
   # BROKER_GRPC_URL are set on them, which needs Gateway 4.x, a Player Service with gRPC and a
@@ -866,9 +866,9 @@ services:
       BROKER_CIRCUIT_THRESHOLD: ${BROKER_CIRCUIT_THRESHOLD:-3}
       BROKER_CIRCUIT_WINDOW_MS: ${BROKER_CIRCUIT_WINDOW_MS:-35000}
       BROKER_CIRCUIT_OPEN_MS: ${BROKER_CIRCUIT_OPEN_MS:-35000}
-      # Dead letters and events waiting in topic queues are kept in memory. BROKER_DATA_DIR: /data
-      # would keep them in /data/broker.sqlite across restarts, once the broker's image owns /data
-      # (4.1.0's doesn't, so it can't open the file on the broker-data volume).
+      # Dead letters, events waiting in topic queues and the saga log are kept in memory.
+      # BROKER_DATABASE_URL (a PostgreSQL URL) would keep them across restarts. Don't set
+      # BROKER_DATA_DIR: the SQLite store is gone, and 5.0.0 refuses to start with it.
       BROKER_DLQ_MAX: ${BROKER_DLQ_MAX:-1000}
       BROKER_DLQ_TTL_MS: ${BROKER_DLQ_TTL_MS:-604800000}
       # Name lookups of services with no running container take seconds; more threads keep them
