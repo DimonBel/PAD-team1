@@ -32,7 +32,7 @@ Every component of the stack and how they connect: the Gateway with its Redis ca
 
 ![System overview](./docs/diagrams/01-system-overview.svg)
 
-> **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)). The Redis cache, the Patroni clusters, `etl-service` with `warehouse-db`, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
+> **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)). The Redis cache, `etl-service` with `warehouse-db`, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
 
 ### Cache and consistent hashing
 
@@ -42,7 +42,7 @@ The Gateway caches common GET answers and login sessions in three independent Re
 
 ### Database replication and failover
 
-`player-db`, `game-db`, `zombie-db` and `resource-db` are Patroni clusters: a leader and 2 streaming replicas, one of them synchronous. etcd elects the leader, and HAProxy always sends `:5432` to the leader and `:5433` to the replicas.
+Every service's database (`base-db`, `crafting-db`, `world-db`, `exam-db`, `zombie-db`, `resource-db`, `player-db`, `game-db`) is a Patroni cluster: a leader and 2 streaming replicas, one of them synchronous. etcd elects the leader, and HAProxy always sends `:5432` to the leader and `:5433` to the replicas, so every service connects to its database exactly as before, with no change to its code. A failover takes about 20–30 s and loses no acknowledged write. Setup, runbook and tests: [db-replication/README.md](db-replication/README.md).
 
 ![Database replication and failover](./docs/diagrams/04-database-replication.svg)
 
