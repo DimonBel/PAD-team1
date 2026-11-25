@@ -457,6 +457,84 @@ Only the seed file is needed here, because the migrations already created the ta
 Windows PowerShell, `<` doesn't work, so use
 `Get-Content deploy\db\exam-service-seed.sql | docker compose exec -T exam-db psql -U exam -d exam_service`.
 
+## Lab 5: new endpoints and answers
+
+### Cache and sessions (Gateway 5.1.0)
+
+The Gateway keeps common GET answers and players' sessions in Redis, so repeated reads and token
+checks don't reach the services.
+
+| Part | What it does |
+| --- | --- |
+| GET cache | the routes under `"cache"` in `Gateway-team1/config/routes.json`, each with its own TTL (15 s to 300 s); only `200` answers are kept |
+| `X-Cache` header | `HIT`, `MISS` or `BYPASS` on every cacheable GET |
+| invalidation | a write through the Gateway clears that service's cached answers |
+| `POST /api/players/logout` | ends the caller's session: `204`, and the same token then gets `401 SESSION_REVOKED` |
+| `GET /cache/stats` | hits, misses, the nodes and their share of the ring; needs `X-Admin-Key: $CACHE_ADMIN_KEY`, and `?key=` shows which node owns a key |
+
+The cache is sharded over the Redis nodes in `CACHE_NODES` by consistent hashing, 160 virtual points
+per node (`CACHE_VNODES`). When a node goes down only its keys move to the next node, about a third
+of them with three nodes, where `hash mod N` would move about two thirds. The algorithm, the
+measurements and the comparison with Redis Cluster's hash slots are in
+[Gateway-team1/docs/CONSISTENT_HASHING.md](Gateway-team1/docs/CONSISTENT_HASHING.md).
+
+```bash
+curl -i localhost:8080/api/crafting/recipes -H "Authorization: Bearer $JWT"   # X-Cache: MISS, then HIT
+```
+
+### Database replication
+
+Every database is a three node Patroni cluster behind the name the service already used (see
+[Database replication and failover](#database-replication-and-failover) and
+[db-replication/README.md](db-replication/README.md)). `:5432` on that name is always the leader,
+`:5433` the replicas.
+
+```bash
+docker compose exec base-db-1 patronictl -c /etc/patroni/patroni.yml list   # who leads, lag, timeline
+docker kill <the leader's container>                                         # a replica leads in about 25 s
+```
+
+### Sagas (Message Broker 5.0.0)
+
+Work that changes more than one database is a long running saga, coordinated by the Message Broker
+instead of two phase commit. Each step commits on its own; the broker keeps a durable log of every
+saga in Postgres, retries a step while its service is down, and after a refusal or a passed deadline
+undoes the finished steps in reverse. A step after the pivot is only retried forward.
+
+| Saga | Steps (undo in brackets) |
+| --- | --- |
+| `zombie-steal` | player takes the XP (gives it back), game applies the steal |
+| `session-end` | game marks the session ending (reverts it), player credits each survivor, game finishes the session |
+| `exam-passed` | exam locks the rewards (cancels them), player credits the XP (takes it back), world opens the course's wing (pivot), exam grants the rewards and publishes `exam.passed` |
+| `resource-node` | world marks the node pending (removes it), resource creates the point (pivot), world activates the node and publishes `world.resource_node_created` |
+
+| Broker endpoint | What it does |
+| --- | --- |
+| `POST /v1/sagas/:type` | starts a saga (service token), `?wait_ms=` waits for the end: `200` when finished, `202` while running |
+| `GET /v1/sagas/:id` | the saga's state and steps |
+| `GET /v1/admin/sagas` | sagas by state and type; needs `x-broker-admin-secret` |
+| `POST /v1/admin/sagas/:id/retry` | tries the undo steps of a stuck saga again |
+
+A zombie STEAL answers `200` with the XP taken, `202` with the `saga_id` while a service is down, or
+`409 STEAL_FAILED` when the steal was undone.
+
+### When a write fails halfway (base-service, crafting-service 5.0.0)
+
+Some writes spend resources in resource-service or take an item from player-service before saving
+their own row: barricades, rooms, facilities, storage, Kiki, decorations and crafting jobs. If the
+other service definitely refuses, or the service's own save is refused (not a lost connection), the
+first step is undone and the answer is final for that `event_id`:
+
+```json
+409 {"error": "world-service answered NOT_FOUND", "compensated": true}
+```
+
+A retry with the same `event_id` gets the same answer and costs nothing; a new `event_id` does the
+work, paid once. When the outcome is open (the service's own database is down, or the other service
+timed out and may have run), nothing is undone: the answer is a retryable `5xx`, and a retry with the
+same `event_id` finishes the work, paid once. A caller that only got a `504` from the Gateway retries
+with the same id and gets whatever the service settled on.
+
 ## Authentication
 
 All endpoints marked with **Headers: `Authorization: Bearer <jwt>`** require a valid JWT issued by the **Player Service**. The token contains:
