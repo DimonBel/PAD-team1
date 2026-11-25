@@ -174,12 +174,12 @@ world-service start empty, and their demo data is loaded separately (see
 | world-service | [`alexandramihalevschi/world-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 | gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
-| message-broker | [`dimon1/message-broker:4.2.0`](https://hub.docker.com/r/dimon1/message-broker) | Dmitrii Belih |
+| message-broker | [`dimon1/message-broker:5.0.0`](https://hub.docker.com/r/dimon1/message-broker) | Dmitrii Belih |
 | etl-service | [`dimon1/etl-service:5.0.0`](https://hub.docker.com/r/dimon1/etl-service) | Dmitrii Belih |
 
 The tag is the service version, so `cobili/base-service:3.0.0` is version 3.0.0.
 
-**message-broker:** 4.2.0 is the latest published image (linux/amd64 and linux/arm64), from the `main` branch of [DimonBel/MessageBroker-team1](https://github.com/DimonBel/MessageBroker-team1). Its next version, **5.0.0**, is on that repository's `dev` (it adds the saga coordinator) and is published as `dimon1/message-broker:5.0.0` once the release PR DimonBel/MessageBroker-team1#29 is merged into `main`. `docker-compose.yaml` does not use the image yet: it builds the broker from the `MessageBroker-team1` submodule, which is pinned at 4.1.0 (`2cbf764`).
+**message-broker:** 5.0.0 is the latest published image (`latest` too, linux/amd64 and linux/arm64), from the `main` branch of [DimonBel/MessageBroker-team1](https://github.com/DimonBel/MessageBroker-team1), release PR DimonBel/MessageBroker-team1#34. It adds the saga coordinator: the long-running sagas run by the broker, with the saga log in PostgreSQL. The previous release is 4.2.0. `docker-compose.yaml` does not use the image yet: it builds the broker from the `MessageBroker-team1` submodule, which is pinned at 4.1.0 (`2cbf764`).
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
 
 Every service in the contract is now in `docker-compose.yaml`; there is nothing left to
