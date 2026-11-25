@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+// Crafting Service: the calls other services make to it. Each RPC is the gRPC form of the REST
+// endpoint named above it, with the same fields and the same idempotency key.
+package crafting.v1;
+
+service Crafting {
+  // POST /api/crafting/players/{player_id}/unlocks. Called by Exam Service when an exam is
+  // passed (exam_id, course_id) and by World Service when a wing is unlocked (zone_id).
+  // Idempotent through event_id.
+  rpc UnlockRecipes(UnlockRecipesRequest) returns (UnlockRecipesResponse);
+}
+
+message UnlockRecipesRequest {
+  string player_id = 1;
+  string event_id = 2;
+  // exam-service or world-service
+  string source = 3;
+  optional string exam_id = 4;
+  optional string course_id = 5;
+  optional string zone_id = 6;
+}
+
+message UnlockRecipesResponse {
+  // The recipe ids this call unlocked.
+  repeated string unlocked = 1;
+}
