@@ -457,7 +457,7 @@ Only the seed file is needed here, because the migrations already created the ta
 Windows PowerShell, `<` doesn't work, so use
 `Get-Content deploy\db\exam-service-seed.sql | docker compose exec -T exam-db psql -U exam -d exam_service`.
 
-## Lab 5: new endpoints and answers
+## New endpoints and answers
 
 ### Cache and sessions (Gateway 5.1.0)
 
