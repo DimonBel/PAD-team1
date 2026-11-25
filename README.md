@@ -253,7 +253,7 @@ game-service starts sagas only when `BROKER_URL` is set and `SAGAS` is not `off`
 
 #### etl-service 5.0.0
 
-The data warehouse ETL (Lab 5) lives in its own repository, [DimonBel/ETL-team1](https://github.com/DimonBel/ETL-team1), linked here as the `ETL-team1` submodule (`branch = main`) at its 5.0.0 release `c564488`. Its CI publishes `dimon1/etl-service:<version>` and `latest` (linux/amd64 and linux/arm64) on every merge to `main`.
+The data warehouse ETL lives in its own repository, [DimonBel/ETL-team1](https://github.com/DimonBel/ETL-team1), linked here as the `ETL-team1` submodule (`branch = main`) at its 5.0.0 release `c564488`. Its CI publishes `dimon1/etl-service:<version>` and `latest` (linux/amd64 and linux/arm64) on every merge to `main`.
 
 - It copies the eight service databases into a star schema in `warehouse-db` (12 dimensions, 23 facts, 4 analytics views), incrementally, every 60 s and on `POST /v1/runs`. It reads the databases read-only, from the replicas on `:5433`.
 - A source that is down fails only its own tables; the next run catches up. Deleted rows are marked `is_deleted`, not removed.
