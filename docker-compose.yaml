@@ -383,7 +383,7 @@ services:
     # Lab 5: a database failover can catch the boot migration mid-election; start again.
     restart: unless-stopped
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/world-service:4.0.0
+    image: alexandramihalevschi/world-service:5.0.0
     pull_policy: always
     depends_on:
       world-db:
@@ -464,7 +464,7 @@ services:
     # Lab 5: a database failover can catch the boot migration mid-election; start again.
     restart: unless-stopped
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/exam-service:4.0.0
+    image: alexandramihalevschi/exam-service:5.0.0
     pull_policy: always
     depends_on:
       exam-db:
