@@ -32,7 +32,7 @@ Every component of the stack and how they connect: the Gateway with its Redis ca
 
 ![System overview](./docs/diagrams/01-system-overview.svg)
 
-> **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)). The Redis cache, `etl-service` with `warehouse-db`, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
+> **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)), and `etl-service` 5.0.0 (the `ETL-team1` submodule) runs in this compose with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Redis cache, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
 
 ### Cache and consistent hashing
 
@@ -54,7 +54,7 @@ The two operations that change both `player-db` and `game-db` run as sagas, with
 
 ### Data warehouse and ETL
 
-`etl-service` reads the eight service databases (read-only, incremental) and loads them into a star schema in `warehouse-db`, which Grafana reads.
+`etl-service` reads the eight service databases (read-only, incremental) and loads them into a star schema in `warehouse-db`, which Grafana reads. Its code is the [`ETL-team1`](./ETL-team1) submodule, at 5.0.0; see [etl-service 5.0.0](#etl-service-500).
 
 ![Data warehouse and ETL](./docs/diagrams/06-data-warehouse-etl.svg)
 
@@ -174,6 +174,7 @@ world-service start empty, and their demo data is loaded separately (see
 | world-service | [`alexandramihalevschi/world-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 | gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
+| etl-service | [`dimon1/etl-service:5.0.0`](https://hub.docker.com/r/dimon1/etl-service) | Dmitrii Belih |
 
 The tag is the service version, so `cobili/base-service:3.0.0` is version 3.0.0.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
@@ -249,6 +250,38 @@ Version 5.0.0 of both services adds their side of the long-running sagas. The sa
 - With sagas on, a zombie's XP steal answers `200` with the amount taken, `202` with a `saga_id` while a service is down, or `409 STEAL_FAILED` once the saga has given the XP back.
 
 game-service starts sagas only when `BROKER_URL` is set and `SAGAS` is not `off`. `docker-compose.yaml` sets neither, and this repository's broker has no saga coordinator yet, so the compose runs both services with the direct calls, as in 4.0.1.
+
+#### etl-service 5.0.0
+
+The data warehouse ETL lives in its own repository, [DimonBel/ETL-team1](https://github.com/DimonBel/ETL-team1), linked here as the `ETL-team1` submodule (`branch = main`) at its 5.0.0 release `c564488`. Its CI publishes `dimon1/etl-service:<version>` and `latest` (linux/amd64 and linux/arm64) on every merge to `main`.
+
+- It copies the eight service databases into a star schema in `warehouse-db` (12 dimensions, 23 facts, 4 analytics views), incrementally, every 60 s and on `POST /v1/runs`. It reads the databases read-only, from the replicas on `:5433`.
+- A source that is down fails only its own tables; the next run catches up. Deleted rows are marked `is_deleted`, not removed.
+- `GET /health`, `GET /metrics` for Prometheus, `GET /v1/runs`, `GET /v1/warehouse`.
+- Configuration, the compose snippet for `warehouse-db` and `etl-service`, and the tests are in [ETL-team1's README](https://github.com/DimonBel/ETL-team1#readme).
+
+In `docker-compose.yaml`:
+
+| Container | Host port | What |
+| --- | --- | --- |
+| `warehouse-db` | `127.0.0.1:5440` | PostgreSQL 16 holding the star schema (`dw.dim_*`, `dw.fact_*`, views `dw.v_*`), on the `warehouse-pgdata` volume. On its first start it runs `ETL-team1/initdb/01-reader.sh`, which creates `dw_reader`, a read-only role, when `WAREHOUSE_READER_PASSWORD` is set |
+| `etl-service` | `127.0.0.1:8100` | `dimon1/etl-service:5.0.0` (`ETL_IMAGE` to pin another tag). Reads every service database from its replicas on `:5433`, every `ETL_INTERVAL_S` seconds (60) |
+
+Set `WAREHOUSE_DB_PASSWORD` in `.env` (the compose refuses to start without it). `WAREHOUSE_READER_PASSWORD` and `ETL_ADMIN_KEY` are optional; see `.env.example`. The `initdb` script comes from the submodule, so check it out first:
+
+```bash
+git submodule update --init ETL-team1
+docker compose up -d warehouse-db etl-service
+curl http://localhost:8100/health
+curl -X POST -H "X-Admin-Key: $ETL_ADMIN_KEY" http://localhost:8100/v1/runs   # a run now
+docker compose exec warehouse-db psql -U warehouse -d warehouse -c "SELECT * FROM dw.v_player_progress LIMIT 10"
+```
+
+To update the submodule to a newer release:
+
+```bash
+git submodule update --remote ETL-team1
+```
 
 #### Building exam-service / world-service from source
 

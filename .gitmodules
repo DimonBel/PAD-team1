@@ -34,3 +34,7 @@
 	path = MessageBroker-team1
 	url = https://github.com/DimonBel/MessageBroker-team1.git
 	branch = main
+[submodule "ETL-team1"]
+	path = ETL-team1
+	url = https://github.com/DimonBel/ETL-team1.git
+	branch = main
