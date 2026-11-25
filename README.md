@@ -187,9 +187,12 @@ world-service start empty, and their demo data is loaded separately (see
 | resource-service | [`tukaram40k/resource-service:5.0.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
+| message-broker | [`dimon1/message-broker:5.0.0`](https://hub.docker.com/r/dimon1/message-broker) | Dmitrii Belih |
 | etl-service | [`dimon1/etl-service:5.0.0`](https://hub.docker.com/r/dimon1/etl-service) | Dmitrii Belih |
 
 The tag is the service version, so `cobili/base-service:3.0.0` is version 3.0.0.
+
+**message-broker:** 5.0.0 is the latest published image (`latest` too, linux/amd64 and linux/arm64), from the `main` branch of [DimonBel/MessageBroker-team1](https://github.com/DimonBel/MessageBroker-team1), release PR DimonBel/MessageBroker-team1#34. It adds the saga coordinator: the long-running sagas run by the broker, with the saga log in PostgreSQL. The previous release is 4.2.0. `docker-compose.yaml` runs this published image (`BROKER_IMAGE` pins another tag). The `MessageBroker-team1` submodule is pinned at the same 5.0.0 release on `main` (`dd80892`), for reading the code.
 `docker-compose.yaml` pins the version rather than `latest`, so a run is reproducible.
 
 Every service in the contract is now in `docker-compose.yaml`; there is nothing left to

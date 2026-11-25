@@ -831,10 +831,11 @@ services:
 
   # ---------------------------------------------------------------- message-broker
 
-  # Lab 4: the Message Broker (MessageBroker-team1, 4.1.0). It owns Gateway -> service and
+  # Lab 4: the Message Broker (MessageBroker-team1, 5.0.0). It owns Gateway -> service and
   # service -> service delivery: per-service queues, load balancing, retries, circuit breakers,
-  # gRPC on 9090, topics and the dead letter channel. Built from the submodule, since its image
-  # isn't on Docker Hub yet.
+  # gRPC on 9090, topics, the dead letter channel and, since 5.0.0, the saga coordinator. Runs the
+  # image published on Docker Hub; the MessageBroker-team1 submodule is the same release's code.
+  # BROKER_IMAGE pins another tag, e.g. to try a build of your own.
   #
   # Nothing is routed through it yet: the services and the Gateway use it once BROKER_URL and
   # BROKER_GRPC_URL are set on them, which needs Gateway 4.x, a Player Service with gRPC and a
@@ -858,9 +859,8 @@ services:
       retries: 10
 
   message-broker:
-    image: pad-team1/message-broker:local
-    build: ./MessageBroker-team1
-    pull_policy: build
+    image: ${BROKER_IMAGE:-dimon1/message-broker:5.0.0}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       service-discovery:
@@ -902,9 +902,8 @@ services:
       BROKER_CIRCUIT_THRESHOLD: ${BROKER_CIRCUIT_THRESHOLD:-3}
       BROKER_CIRCUIT_WINDOW_MS: ${BROKER_CIRCUIT_WINDOW_MS:-35000}
       BROKER_CIRCUIT_OPEN_MS: ${BROKER_CIRCUIT_OPEN_MS:-35000}
-      # Dead letters and events waiting in topic queues are kept in memory. BROKER_DATA_DIR: /data
-      # would keep them in /data/broker.sqlite across restarts, once the broker's image owns /data
-      # (4.1.0's doesn't, so it can't open the file on the broker-data volume).
+      # Dead letters are kept in broker-db (BROKER_DATABASE_URL above). Don't set BROKER_DATA_DIR:
+      # the SQLite store is gone, and 5.0.0 refuses to start with it.
       BROKER_DLQ_MAX: ${BROKER_DLQ_MAX:-1000}
       BROKER_DLQ_TTL_MS: ${BROKER_DLQ_TTL_MS:-604800000}
       # Name lookups of services with no running container take seconds; more threads keep them
