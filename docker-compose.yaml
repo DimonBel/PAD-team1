@@ -833,8 +833,9 @@ services:
 
   # Lab 4: the Message Broker (MessageBroker-team1, 5.0.0). It owns Gateway -> service and
   # service -> service delivery: per-service queues, load balancing, retries, circuit breakers,
-  # gRPC on 9090, topics, the dead letter channel and, since 5.0.0, the saga coordinator. Built
-  # from the submodule, the same code as the published dimon1/message-broker:5.0.0.
+  # gRPC on 9090, topics, the dead letter channel and, since 5.0.0, the saga coordinator. Runs the
+  # image published on Docker Hub; the MessageBroker-team1 submodule is the same release's code.
+  # BROKER_IMAGE pins another tag, e.g. to try a build of your own.
   #
   # Nothing is routed through it yet: the services and the Gateway use it once BROKER_URL and
   # BROKER_GRPC_URL are set on them, which needs Gateway 4.x, a Player Service with gRPC and a
@@ -858,9 +859,8 @@ services:
       retries: 10
 
   message-broker:
-    image: pad-team1/message-broker:local
-    build: ./MessageBroker-team1
-    pull_policy: build
+    image: ${BROKER_IMAGE:-dimon1/message-broker:5.0.0}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       service-discovery:
