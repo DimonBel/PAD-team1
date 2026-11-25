@@ -181,10 +181,10 @@ world-service start empty, and their demo data is loaded separately (see
 | crafting-service | [`cobili/crafting-service:5.0.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
 | player-service | [`dimon1/player-service:5.0.0`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
 | game-service | [`dimon1/game-service:5.0.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
-| zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
-| resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | exam-service | [`alexandramihalevschi/exam-service:5.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
 | world-service | [`alexandramihalevschi/world-service:5.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| zombie-service | [`tukaram40k/zombie-service:5.0.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
+| resource-service | [`tukaram40k/resource-service:5.0.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
 | etl-service | [`dimon1/etl-service:5.0.0`](https://hub.docker.com/r/dimon1/etl-service) | Dmitrii Belih |
