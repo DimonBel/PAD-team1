@@ -139,7 +139,7 @@ The WebSocket carries live events: presence, friends and trades from Player Serv
 <details>
 <summary>Lab 4 diagram, before the cache, replication and sagas</summary>
 
-![Architectural Diagram, Lab 4](./docs/diagram_new.jpg)
+![Architectural Diagram v2, Lab 4](./docs/architecture-v2.jpg)
 
 </details>
 
@@ -148,7 +148,7 @@ The WebSocket carries live events: presence, friends and trades from Player Serv
 
 In Lab 3, the Gateway also routed service-to-service calls over REST and balanced them between instances itself.
 
-![Architectural Diagram, Lab 3](./docs/architecture.jpg)
+![Architectural Diagram v1, Lab 3](./docs/architecture-v1.jpg)
 
 </details>
 

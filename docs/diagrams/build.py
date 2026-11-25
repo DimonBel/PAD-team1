@@ -10,7 +10,7 @@ Each diagram is written three times into docs/diagrams/:
 - <name>.svg: vector, used by the README;
 - <name>.png: 2x raster, for slides and anything that can't show SVG.
 
-The overview is also copied to docs/architecture.svg / .png, where older links point.
+The overview is also copied to docs/architecture-overview.svg / .png.
 Edit the diagrams here, not in the exported files, so the three formats stay the same.
 """
 
@@ -68,9 +68,9 @@ def main() -> None:
         print(line)
     overview = HERE / "01-system-overview"
     if overview.with_suffix(".svg").exists():
-        shutil.copyfile(overview.with_suffix(".svg"), DOCS / "architecture.svg")
+        shutil.copyfile(overview.with_suffix(".svg"), DOCS / "architecture-overview.svg")
     if overview.with_suffix(".png").exists():
-        shutil.copyfile(overview.with_suffix(".png"), DOCS / "architecture.png")
+        shutil.copyfile(overview.with_suffix(".png"), DOCS / "architecture-overview.png")
 
 
 if __name__ == "__main__":
