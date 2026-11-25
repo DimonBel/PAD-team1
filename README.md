@@ -32,7 +32,7 @@ Every component of the stack and how they connect: the Gateway with its Redis ca
 
 ![System overview](./docs/diagrams/01-system-overview.svg)
 
-> **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)), and `etl-service` 5.0.0 (the `ETL-team1` submodule) runs in this compose with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Redis cache, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
+> **Where the code lives.** The diagrams show the whole stack. This repository has the saga coordinator (the `MessageBroker-team1` submodule, 5.0.0, with its saga log in `broker-db`), the services that serve the saga steps (player-service and game-service 5.0.0, see [player-service and game-service 5.0.0](#player-service-and-game-service-500); exam-service and world-service 5.0.0), the replicated databases (`db-replication/`), and `etl-service` 5.0.0 (the `ETL-team1` submodule) with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Redis cache and the monitoring stack are not yet in this compose or in the `Gateway-team1` submodule. On the diagrams, `Message-Broker/` is the `MessageBroker-team1` submodule.
 
 ### Cache and consistent hashing
 
@@ -48,7 +48,20 @@ Every service's database (`base-db`, `crafting-db`, `world-db`, `exam-db`, `zomb
 
 ### Long-running sagas
 
-The two operations that change both `player-db` and `game-db` run as sagas, with the Message Broker as the coordinator: `zombie-steal` and `session-end`. A step that fails is retried, and a refused step undoes the finished ones in reverse.
+Every operation that changes more than one service's database runs as a long-running saga, with the Message Broker as the coordinator. Each step is a gRPC call delivered through the broker, with a compensation that undoes it.
+
+| Saga | Started by | Databases | Steps |
+| --- | --- | --- | --- |
+| `zombie-steal` | game-service | player, game | player `StealXp` (undo: give it back), game `ApplySteal` |
+| `session-end` | game-service | game, player | game `BeginSessionEnd` (ENDING, a semantic lock), player `AdjustXp` per survivor, game `FinishSession` (forward recovery) |
+| `exam-passed` | exam-service | exam, player, world | exam `BeginRewards`, player `AdjustXp` (undo: take it back), world `UnlockSection` (**pivot**: the wing is shared, never locked again), exam `CompleteRewards`, which publishes `exam.passed` |
+| `resource-node` | world-service | world, resource | world `BeginNode` (undo: remove the node), resource `CreatePoint` (**pivot**; `ALREADY_EXISTS` is looked up), world `ActivateNode` |
+
+- **Long-running:** a step that can't be delivered is retried with backoff until its deadline (`BROKER_SAGA_STEP_DEADLINE_MS`, 10 min); a refusal or a passed deadline compensates the done steps in reverse order.
+- **Pivots:** a pivot is never compensated on a timeout: it is asked again until the participant answers definitely.
+- **Saga log:** the broker keeps it in `broker-db`, so a restarted broker resumes every unfinished saga, and every step carries an operation id the participant dedupes on.
+- **Details:** the API, the states and the settings are in the [MessageBroker-team1 README](MessageBroker-team1/README.md); the steps on each service are in [exam-service §12](exam-service/README.md) and [world-service §15](world-service/README.md); the gRPC contracts are in [`proto/`](proto/).
+- **In this compose,** `exam-passed` and `resource-node` run once exam-service, world-service, player-service and resource-service run in broker mode (`BROKER_URL`, `BROKER_GRPC_URL`, `GRPC_PORT`). Until then exam-service and world-service keep their old notifications (`SAGAS` is on by default and switches on with broker mode).
 
 ![Long-running sagas](./docs/diagrams/05-sagas.svg)
 
@@ -168,10 +181,10 @@ world-service start empty, and their demo data is loaded separately (see
 | crafting-service | [`cobili/crafting-service:5.0.0`](https://hub.docker.com/r/cobili/crafting-service) | Bujor-Cobili Alexandra |
 | player-service | [`dimon1/player-service:5.0.0`](https://hub.docker.com/r/dimon1/player-service) | Dmitrii Belih |
 | game-service | [`dimon1/game-service:5.0.0`](https://hub.docker.com/r/dimon1/game-service) | Dmitrii Belih |
-| zombie-service | [`tukaram40k/zombie-service:0.1.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
-| resource-service | [`tukaram40k/resource-service:0.1.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
-| exam-service | [`alexandramihalevschi/exam-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
-| world-service | [`alexandramihalevschi/world-service:4.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| exam-service | [`alexandramihalevschi/exam-service:5.0.0`](https://hub.docker.com/r/alexandramihalevschi/exam-service) | Alexandra Mihalevschi |
+| world-service | [`alexandramihalevschi/world-service:5.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
+| zombie-service | [`tukaram40k/zombie-service:5.0.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
+| resource-service | [`tukaram40k/resource-service:5.0.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
 | message-broker | [`dimon1/message-broker:5.0.0`](https://hub.docker.com/r/dimon1/message-broker) | Dmitrii Belih |
@@ -492,6 +505,84 @@ fix. game-service migrates and seeds itself on boot like the Ruby services.
 Only the seed file is needed here, because the migrations already created the tables. On
 Windows PowerShell, `<` doesn't work, so use
 `Get-Content deploy\db\exam-service-seed.sql | docker compose exec -T exam-db psql -U exam -d exam_service`.
+
+## New endpoints and answers
+
+### Cache and sessions (Gateway 5.1.0)
+
+The Gateway keeps common GET answers and players' sessions in Redis, so repeated reads and token
+checks don't reach the services.
+
+| Part | What it does |
+| --- | --- |
+| GET cache | the routes under `"cache"` in `Gateway-team1/config/routes.json`, each with its own TTL (15 s to 300 s); only `200` answers are kept |
+| `X-Cache` header | `HIT`, `MISS` or `BYPASS` on every cacheable GET |
+| invalidation | a write through the Gateway clears that service's cached answers |
+| `POST /api/players/logout` | ends the caller's session: `204`, and the same token then gets `401 SESSION_REVOKED` |
+| `GET /cache/stats` | hits, misses, the nodes and their share of the ring; needs `X-Admin-Key: $CACHE_ADMIN_KEY`, and `?key=` shows which node owns a key |
+
+The cache is sharded over the Redis nodes in `CACHE_NODES` by consistent hashing, 160 virtual points
+per node (`CACHE_VNODES`). When a node goes down only its keys move to the next node, about a third
+of them with three nodes, where `hash mod N` would move about two thirds. The algorithm, the
+measurements and the comparison with Redis Cluster's hash slots are in
+[Gateway-team1/docs/CONSISTENT_HASHING.md](Gateway-team1/docs/CONSISTENT_HASHING.md).
+
+```bash
+curl -i localhost:8080/api/crafting/recipes -H "Authorization: Bearer $JWT"   # X-Cache: MISS, then HIT
+```
+
+### Database replication
+
+Every database is a three node Patroni cluster behind the name the service already used (see
+[Database replication and failover](#database-replication-and-failover) and
+[db-replication/README.md](db-replication/README.md)). `:5432` on that name is always the leader,
+`:5433` the replicas.
+
+```bash
+docker compose exec base-db-1 patronictl -c /etc/patroni/patroni.yml list   # who leads, lag, timeline
+docker kill <the leader's container>                                         # a replica leads in about 25 s
+```
+
+### Sagas (Message Broker 5.0.0)
+
+Work that changes more than one database is a long running saga, coordinated by the Message Broker
+instead of two phase commit. Each step commits on its own; the broker keeps a durable log of every
+saga in Postgres, retries a step while its service is down, and after a refusal or a passed deadline
+undoes the finished steps in reverse. A step after the pivot is only retried forward.
+
+| Saga | Steps (undo in brackets) |
+| --- | --- |
+| `zombie-steal` | player takes the XP (gives it back), game applies the steal |
+| `session-end` | game marks the session ending (reverts it), player credits each survivor, game finishes the session |
+| `exam-passed` | exam locks the rewards (cancels them), player credits the XP (takes it back), world opens the course's wing (pivot), exam grants the rewards and publishes `exam.passed` |
+| `resource-node` | world marks the node pending (removes it), resource creates the point (pivot), world activates the node and publishes `world.resource_node_created` |
+
+| Broker endpoint | What it does |
+| --- | --- |
+| `POST /v1/sagas/:type` | starts a saga (service token), `?wait_ms=` waits for the end: `200` when finished, `202` while running |
+| `GET /v1/sagas/:id` | the saga's state and steps |
+| `GET /v1/admin/sagas` | sagas by state and type; needs `x-broker-admin-secret` |
+| `POST /v1/admin/sagas/:id/retry` | tries the undo steps of a stuck saga again |
+
+A zombie STEAL answers `200` with the XP taken, `202` with the `saga_id` while a service is down, or
+`409 STEAL_FAILED` when the steal was undone.
+
+### When a write fails halfway (base-service, crafting-service 5.0.0)
+
+Some writes spend resources in resource-service or take an item from player-service before saving
+their own row: barricades, rooms, facilities, storage, Kiki, decorations and crafting jobs. If the
+other service definitely refuses, or the service's own save is refused (not a lost connection), the
+first step is undone and the answer is final for that `event_id`:
+
+```json
+409 {"error": "world-service answered NOT_FOUND", "compensated": true}
+```
+
+A retry with the same `event_id` gets the same answer and costs nothing; a new `event_id` does the
+work, paid once. When the outcome is open (the service's own database is down, or the other service
+timed out and may have run), nothing is undone: the answer is a retryable `5xx`, and a retry with the
+same `event_id` finishes the work, paid once. A caller that only got a `504` from the Gateway retries
+with the same id and gets whatever the service settled on.
 
 ## Authentication
 
