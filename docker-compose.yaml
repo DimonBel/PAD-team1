@@ -405,6 +405,9 @@ services:
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
       SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
       DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+      # Lab 5: a placed resource node's point is made by the resource-node saga on the Message Broker
+      # once the service runs in broker mode (BROKER_URL); off keeps the old notification either way.
+      SAGAS: ${WORLD_SAGAS:-on}
     deploy:
       replicas: ${WORLD_REPLICAS:-2}
 
@@ -486,6 +489,9 @@ services:
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
       SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
       DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+      # Lab 5: a passed exam's XP and wing run as the exam-passed saga on the Message Broker once
+      # the service runs in broker mode (BROKER_URL); off keeps the old notifications either way.
+      SAGAS: ${EXAM_SAGAS:-on}
     deploy:
       replicas: ${EXAM_REPLICAS:-2}
 
@@ -833,6 +839,24 @@ services:
   # Nothing is routed through it yet: the services and the Gateway use it once BROKER_URL and
   # BROKER_GRPC_URL are set on them, which needs Gateway 4.x, a Player Service with gRPC and a
   # Service Discovery that keeps topics. Until then it runs on its own: GET /health, /v1/topics.
+  # Lab 5: where the broker keeps its saga log, dead letters and waiting topic events, so a restart
+  # resumes every unfinished saga and loses no dead letter (MessageBroker-team1 README).
+  broker-db:
+    image: postgres:16-alpine
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${BROKER_DB_USER:-broker}
+      POSTGRES_PASSWORD: ${BROKER_DB_PASSWORD:?set BROKER_DB_PASSWORD in .env}
+      POSTGRES_DB: ${BROKER_DB_NAME:-broker}
+    volumes:
+      - broker-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BROKER_DB_USER:-broker} -d ${BROKER_DB_NAME:-broker}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   message-broker:
     image: pad-team1/message-broker:local
     build: ./MessageBroker-team1
@@ -841,9 +865,21 @@ services:
     depends_on:
       service-discovery:
         condition: service_healthy
+      broker-db:
+        condition: service_healthy
     environment:
       PORT: "8090"
       BROKER_GRPC_PORT: "9090"
+      # Lab 5: the saga log, dead letters and waiting events, in the broker's own database.
+      BROKER_DATABASE_URL: postgres://${BROKER_DB_USER:-broker}:${BROKER_DB_PASSWORD}@broker-db:5432/${BROKER_DB_NAME:-broker}
+      # Long-running sagas: how long a step may keep failing to be delivered before the saga
+      # compensates, how long a compensation may keep failing before the saga is stuck, the
+      # backoff between tries and one call's timeout.
+      BROKER_SAGA_STEP_DEADLINE_MS: ${BROKER_SAGA_STEP_DEADLINE_MS:-600000}
+      BROKER_SAGA_COMPENSATION_DEADLINE_MS: ${BROKER_SAGA_COMPENSATION_DEADLINE_MS:-3600000}
+      BROKER_SAGA_BACKOFF_MS: ${BROKER_SAGA_BACKOFF_MS:-1000}
+      BROKER_SAGA_BACKOFF_MAX_MS: ${BROKER_SAGA_BACKOFF_MAX_MS:-60000}
+      BROKER_SAGA_CALL_TIMEOUT_MS: ${BROKER_SAGA_CALL_TIMEOUT_MS:-8000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
@@ -1014,6 +1050,7 @@ services:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
 
 volumes:
+  broker-pgdata:
   etcd-1:
   etcd-2:
   etcd-3:
