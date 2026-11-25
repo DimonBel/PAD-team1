@@ -542,7 +542,7 @@ services:
   zombie-service:
     # Lab 5: a database failover can catch the boot migration mid-election; start again.
     restart: unless-stopped
-    image: tukaram40k/zombie-service:3.0.0
+    image: tukaram40k/zombie-service:5.0.0
     pull_policy: always
     depends_on:
       zombie-db:
@@ -617,7 +617,7 @@ services:
   resource-service:
     # Lab 5: a database failover can catch the boot migration mid-election; start again.
     restart: unless-stopped
-    image: tukaram40k/resource-service:3.0.0
+    image: tukaram40k/resource-service:5.0.0
     pull_policy: always
     depends_on:
       resource-db:
