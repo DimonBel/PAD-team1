@@ -32,7 +32,7 @@ Every component of the stack and how they connect: the Gateway with its Redis ca
 
 ![System overview](./docs/diagrams/01-system-overview.svg)
 
-> **Where the code lives.** The diagrams show the whole stack. This repository already has its service side: player-service and game-service 5.0.0 serve the saga steps (see [player-service and game-service 5.0.0](#player-service-and-game-service-500)), and `etl-service` 5.0.0 (the `ETL-team1` submodule) runs in this compose with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Redis cache, the monitoring stack and the broker's saga coordinator are in the team's private integration repository, not yet in this compose or in the `Gateway-team1` and `MessageBroker-team1` submodules. File paths printed on the diagrams, such as `Message-Broker/src/sagas/` and `db-replication/`, refer to that repository.
+> **Where the code lives.** The diagrams show the whole stack. This repository has the saga coordinator (the `MessageBroker-team1` submodule, 5.0.0, with its saga log in `broker-db`), the services that serve the saga steps (player-service and game-service 5.0.0, see [player-service and game-service 5.0.0](#player-service-and-game-service-500); exam-service and world-service 5.0.0), the replicated databases (`db-replication/`), and `etl-service` 5.0.0 (the `ETL-team1` submodule) with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Redis cache and the monitoring stack are not yet in this compose or in the `Gateway-team1` submodule. On the diagrams, `Message-Broker/` is the `MessageBroker-team1` submodule.
 
 ### Cache and consistent hashing
 
@@ -48,7 +48,20 @@ Every service's database (`base-db`, `crafting-db`, `world-db`, `exam-db`, `zomb
 
 ### Long-running sagas
 
-The two operations that change both `player-db` and `game-db` run as sagas, with the Message Broker as the coordinator: `zombie-steal` and `session-end`. A step that fails is retried, and a refused step undoes the finished ones in reverse.
+Every operation that changes more than one service's database runs as a long-running saga, with the Message Broker as the coordinator. Each step is a gRPC call delivered through the broker, with a compensation that undoes it.
+
+| Saga | Started by | Databases | Steps |
+| --- | --- | --- | --- |
+| `zombie-steal` | game-service | player, game | player `StealXp` (undo: give it back), game `ApplySteal` |
+| `session-end` | game-service | game, player | game `BeginSessionEnd` (ENDING, a semantic lock), player `AdjustXp` per survivor, game `FinishSession` (forward recovery) |
+| `exam-passed` | exam-service | exam, player, world | exam `BeginRewards`, player `AdjustXp` (undo: take it back), world `UnlockSection` (**pivot**: the wing is shared, never locked again), exam `CompleteRewards`, which publishes `exam.passed` |
+| `resource-node` | world-service | world, resource | world `BeginNode` (undo: remove the node), resource `CreatePoint` (**pivot**; `ALREADY_EXISTS` is looked up), world `ActivateNode` |
+
+- **Long-running:** a step that can't be delivered is retried with backoff until its deadline (`BROKER_SAGA_STEP_DEADLINE_MS`, 10 min); a refusal or a passed deadline compensates the done steps in reverse order.
+- **Pivots:** a pivot is never compensated on a timeout: it is asked again until the participant answers definitely.
+- **Saga log:** the broker keeps it in `broker-db`, so a restarted broker resumes every unfinished saga, and every step carries an operation id the participant dedupes on.
+- **Details:** the API, the states and the settings are in the [MessageBroker-team1 README](MessageBroker-team1/README.md); the steps on each service are in [exam-service §12](exam-service/README.md) and [world-service §15](world-service/README.md); the gRPC contracts are in [`proto/`](proto/).
+- **In this compose,** `exam-passed` and `resource-node` run once exam-service, world-service, player-service and resource-service run in broker mode (`BROKER_URL`, `BROKER_GRPC_URL`, `GRPC_PORT`). Until then exam-service and world-service keep their old notifications (`SAGAS` is on by default and switches on with broker mode).
 
 ![Long-running sagas](./docs/diagrams/05-sagas.svg)
 

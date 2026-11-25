@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+// Exam Service: the calls other services make to it. Each RPC is the gRPC form of the REST
+// endpoint named above it, with the same fields.
+package exam.v1;
+
+service Exams {
+  // GET /api/courses
+  rpc ListCourses(ListCoursesRequest) returns (ListCoursesResponse);
+
+  // POST /api/exam-attempts. Called by Game Service when a player meets a Professor Zombie.
+  // FAILED_PRECONDITION when the player already has an active attempt.
+  rpc StartAttempt(StartAttemptRequest) returns (StartedAttempt);
+
+  // DELETE /api/exam-attempts/{attempt_id}
+  rpc CancelAttempt(CancelAttemptRequest) returns (CancelledAttempt);
+
+  // GET /api/players/{player_id}/exams. Crafting Service gates exam-locked recipes on it.
+  rpc ListPlayerExams(ListPlayerExamsRequest) returns (ListPlayerExamsResponse);
+
+  // Lab 5: the exam-passed saga's steps on this service, called by the Message Broker as the saga
+  // coordinator. Idempotent: a repeat answers the same status.
+  // BeginRewards: rewards requested -> in_progress. FAILED_PRECONDITION if the attempt wasn't passed
+  // or its rewards were cancelled; NOT_FOUND for an unknown attempt.
+  rpc BeginRewards(RewardsRequest) returns (RewardsResult);
+  // CancelRewards (compensation of BeginRewards): rewards -> cancelled. The grade stays.
+  rpc CancelRewards(RewardsRequest) returns (RewardsResult);
+  // CompleteRewards: rewards in_progress -> granted, then exam.passed is published.
+  // UNAVAILABLE while the event can't be published, so the broker asks again.
+  rpc CompleteRewards(RewardsRequest) returns (RewardsResult);
+}
+
+message ListCoursesRequest {}
+
+message Course {
+  string course_id = 1;
+  string name = 2;
+  int32 required_exam_count = 3;
+}
+
+message ListCoursesResponse {
+  repeated Course courses = 1;
+}
+
+message StartAttemptRequest {
+  string player_id = 1;
+  string course_id = 2;
+  string encounter_id = 3;
+}
+
+// A question without its correct answer.
+message Question {
+  string question_id = 1;
+  string text = 2;
+  repeated string options = 3;
+}
+
+message StartedAttempt {
+  string attempt_id = 1;
+  string exam_id = 2;
+  repeated Question questions = 3;
+  // ISO 8601, e.g. 2026-09-08T10:10:00Z
+  string expires_at = 4;
+}
+
+message CancelAttemptRequest {
+  string attempt_id = 1;
+}
+
+message CancelledAttempt {
+  string attempt_id = 1;
+  string status = 2;
+}
+
+message ListPlayerExamsRequest {
+  string player_id = 1;
+}
+
+message ExamGrade {
+  string exam_id = 1;
+  string course_id = 2;
+  // passed, failed, in_progress, ...
+  string status = 3;
+  // Absent until the attempt is graded.
+  optional double grade = 4;
+}
+
+message ListPlayerExamsResponse {
+  repeated ExamGrade exams = 1;
+}
+
+message RewardsRequest {
+  // saga:<saga id>:<step>, the step's idempotency key
+  string operation_id = 1;
+  string attempt_id = 2;
+}
+
+message RewardsResult {
+  // The attempt's rewards status after the step: in_progress, cancelled or granted.
+  string status = 1;
+}

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+// Zombie Service: the calls other services make to it. Each RPC is the gRPC form of the REST
+// endpoint named above it, with the same fields.
+package zombie.v1;
+
+service Zombies {
+  // GET /api/zombies/types. Game Service spawns night zombies from this list.
+  rpc ListTypes(ListTypesRequest) returns (ListTypesResponse);
+}
+
+message ListTypesRequest {}
+
+// The summary the list endpoint returns: stats only, behaviours stay on the detail view.
+message ZombieType {
+  string type_id = 1;
+  string name = 2;
+  int32 health = 3;
+  int32 damage = 4;
+  double speed = 5;
+  optional string loot_table_id = 6;
+}
+
+message ListTypesResponse {
+  repeated ZombieType types = 1;
+}
