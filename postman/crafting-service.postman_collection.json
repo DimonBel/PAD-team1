@@ -1,17 +1,13 @@
 {
   "info": {
     "name": "PAD-team1 / crafting-service",
-    "description": "Every endpoint of crafting-service.\n\nSet `playerToken` and `serviceToken` first:\n\n    docker compose exec app bundle exec rake token:player\n    docker compose exec app bundle exec rake token:service\n\nRun the folders top to bottom with the Collection Runner. `jobId` is captured from the craft request. `event_id` uses {{$guid}} so re-running never replays an old idempotency record.",
+    "description": "Crafting Service through the API Gateway, with a real player whose materials are in resource-service. Set jwt_secret and service_jwt_secret from the stack's .env, then run the whole collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://localhost:8080"
-    },
-    {
-      "key": "serviceUrl",
-      "value": "http://localhost:4008"
     },
     {
       "key": "playerToken",
@@ -23,7 +19,7 @@
     },
     {
       "key": "playerId",
-      "value": "player-uuid-123"
+      "value": ""
     },
     {
       "key": "recipeId",
@@ -40,47 +36,104 @@
     {
       "key": "timedJobId",
       "value": ""
+    },
+    {
+      "key": "jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "service_jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8500",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stock_items",
+      "value": "[]",
+      "type": "string"
     }
   ],
   "item": [
     {
-      "name": "00 Health",
-      "description": "No auth required.",
+      "name": "00 Setup: a real player (player-service)",
       "item": [
         {
-          "name": "Health",
+          "name": "Register a player",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{playerToken}}"
-              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
-            "url": {
-              "raw": "{{serviceUrl}}/health",
-              "host": [
-                "{{serviceUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
+            "url": "{{baseUrl}}/api/players/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"crafter_{{run_id}}\",\n  \"email\": \"crafter_{{run_id}}@faf.university\",\n  \"password\": \"crafterpass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": ""
+            "auth": {
+              "type": "noauth"
+            }
           },
-          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('db up', () => pm.expect(pm.response.json().database).to.eql('up'));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"playerId\", pm.response.json().player_id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "00 Health",
+      "description": "No auth required.",
+      "item": [
+        {
+          "name": "crafting-service is up in Service Discovery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/services/crafting-service?status=up",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"at least one crafting-service instance is up\", () => {",
+                  "    const body = pm.response.json();",
+                  "    const instances = Array.isArray(body) ? body : body.instances;",
+                  "    pm.expect(instances.length).to.be.above(0);",
+                  "    instances.forEach((i) => pm.expect(i.status).to.eql(\"up\"));",
+                  "});"
                 ]
               }
             }
@@ -126,7 +179,57 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "// What the player needs for every recipe, ten times over: stocked in resource-service next.",
+                  "const recipes = pm.response.json();",
+                  "const stock = {};",
+                  "(Array.isArray(recipes) ? recipes : recipes.recipes).forEach((r) => (r.inputs || []).forEach((i) => { stock[i.item_id] = (stock[i.item_id] || 0) + i.count * 10; }));",
+                  "pm.collectionVariables.set(\"stock_items\", JSON.stringify(Object.entries(stock).map(([item_id, count]) => ({ item_id, count }))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stock the player in resource-service",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/resources/entities/player/{{playerId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"stock-{{run_id}}\",\n  \"operation\": \"add\",\n  \"items\": {{stock_items}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"the materials are in stock\", () => pm.expect(pm.response.json().length).to.be.above(0));"
                 ]
               }
             }
@@ -925,7 +1028,7 @@
           ]
         },
         {
-          "name": "Player cannot grant unlocks -> 401",
+          "name": "Player cannot grant unlocks -> 404 (Gateway)",
           "request": {
             "method": "POST",
             "header": [
@@ -969,7 +1072,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"the Gateway hides service-only routes from players\", () => pm.expect(pm.response.json().error).to.eql(\"ROUTE_NOT_FOUND\"));"
                 ]
               }
             }
@@ -1156,6 +1260,38 @@
           ]
         }
       ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// A run starts at \"Register a player\": a fresh run_id (unique usernames, lobbies, operation ids), and the ids",
+          "// the previous run saved are forgotten, so two runs in a row never collide.",
+          "if (pm.info.requestName === \"Register a player\" || !pm.collectionVariables.get(\"run_id\")) {",
+          "    pm.collectionVariables.set(\"run_id\", Date.now().toString(36));",
+          "    [\"playerId\", \"jobId\", \"timedJobId\"].forEach((key) => pm.collectionVariables.set(key, \"\"));",
+          "}",
+          "",
+          "// Every request goes through the API Gateway (base url). The Gateway checks each token: HS256, signed",
+          "// with JWT_SECRET (players) or SERVICE_JWT_SECRET (services, sub \"service:<name>\"). Put the stack's two",
+          "// values from .env into the collection variables jwt_secret and service_jwt_secret.",
+          "function base64url(wordArray) {",
+          "    return CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, \"-\").replace(/\\//g, \"_\").replace(/=+$/, \"\");",
+          "}",
+          "function signJWT(payload, secret) {",
+          "    const header = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify({ alg: \"HS256\", typ: \"JWT\" })));",
+          "    const body = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)));",
+          "    return header + \".\" + body + \".\" + base64url(CryptoJS.HmacSHA256(header + \".\" + body, secret));",
+          "}",
+          "const now = Math.floor(Date.now() / 1000);",
+          "",
+          "pm.collectionVariables.set(\"serviceToken\", signJWT({ sub: \"service:exam-service\", roles: [\"service\"], type: \"service\", iat: now, exp: now + 300 }, pm.variables.get(\"service_jwt_secret\")));",
+          "pm.collectionVariables.set(\"playerToken\", signJWT({ sub: pm.collectionVariables.get(\"playerId\") || \"postman-moderator\", roles: [\"player\", \"moderator\"], type: \"player\", iat: now, exp: now + 3600 }, pm.variables.get(\"jwt_secret\")));"
+        ]
+      }
     }
   ]
 }

@@ -11,18 +11,18 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// A run starts at the collection's first request (Create Course): it gets a fresh",
+          "// A run starts at \"Register the exam player\": it gets a fresh",
           "// run_id and forgets the ids the previous run created, because the Postman app keeps",
           "// collection variables between runs. Every later request reuses them, so two runs in a",
           "// row never collide (no 422 on re-created data, no progress carried over).",
-          "const RUN_SCOPED = [\"exam_id\", \"attempt_id\", \"dup_attempt_id\", \"cancel_attempt_id\", \"first_score\"];",
-          "if (pm.info.requestName === \"Create Course\" || !pm.collectionVariables.get(\"run_id\")) {",
+          "const RUN_SCOPED = [\"player_id\", \"exam_id\", \"attempt_id\", \"dup_attempt_id\", \"cancel_attempt_id\", \"first_score\"];",
+          "if (pm.info.requestName === \"Register the exam player\" || !pm.collectionVariables.get(\"run_id\")) {",
           "    pm.collectionVariables.set(\"run_id\", Date.now().toString());",
           "    RUN_SCOPED.forEach((key) => pm.collectionVariables.set(key, \"\"));",
           "}",
           "const runId = pm.collectionVariables.get(\"run_id\");",
           "pm.collectionVariables.set(\"course_id\", \"postman-course-\" + runId);",
-          "pm.collectionVariables.set(\"player_id\", \"postman-player-\" + runId);",
+          "// player_id is a real player, registered by the first request of \"1. Setup\".",
           "",
           "// Minimal HS256 JWT signer using Postman's bundled CryptoJS — lets this collection",
           "// mint its own valid player/moderator/service tokens instead of needing them pasted",
@@ -205,6 +205,29 @@
     {
       "name": "1. Setup — Courses & Exams",
       "item": [
+        {
+          "name": "Register the exam player",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "// The exam-passed saga awards XP in player-service, so the examinee must be a real player.",
+                  "pm.collectionVariables.set(\"player_id\", pm.response.json().player_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "noauth" },
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"examinee_{{run_id}}\",\n  \"email\": \"examinee_{{run_id}}@faf.university\",\n  \"password\": \"examinee123\"\n}" },
+            "url": "{{base_url}}/api/players/register"
+          }
+        },
         {
           "name": "Create Course",
           "event": [

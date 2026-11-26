@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "zombie-service",
-    "description": "Every endpoint of zombie-service.\n\nSet `serviceToken` and `playerToken` first:\n\n    docker compose exec zombie-service bundle exec rake token:service\n    docker compose exec zombie-service bundle exec rake token:player\n\nRun the folders top to bottom with the Collection Runner. Requests capture `zombieId` and `disposableZombieId` into collection variables, so later requests reuse them. `event_id` uses {{$guid}}, so re-running never replays an old idempotency record.\n\nEvery endpoint here is marked `Bearer <service_jwt>` in the contract, so the player token is only used to prove it is rejected.",
+    "description": "Zombie Service through the API Gateway. Every zombie route is service-only, so the Gateway answers 404 to a player and 401 without a token. Set jwt_secret and service_jwt_secret from the stack's .env, then run the whole collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:4003"
+      "value": "http://localhost:8080"
     },
     {
       "key": "serviceToken",
@@ -28,6 +28,26 @@
     {
       "key": "disposableZombieId",
       "value": ""
+    },
+    {
+      "key": "jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "service_jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8500",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -35,34 +55,33 @@
       "name": "00 Health",
       "item": [
         {
-          "name": "Health",
+          "name": "zombie-service is up in Service Discovery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/services/zombie-service?status=up",
+            "auth": {
+              "type": "noauth"
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\".service is \\\"zombie-service\\\"\", () => pm.expect(pm.response.json().service).to.eql(\"zombie-service\"));",
-                  "pm.test(\".database is \\\"up\\\"\", () => pm.expect(pm.response.json().database).to.eql(\"up\"));",
-                  "pm.test(\"reports a version\", () => pm.expect(pm.response.json().version).to.be.a(\"string\"));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"at least one zombie-service instance is up\", () => {",
+                  "    const body = pm.response.json();",
+                  "    const instances = Array.isArray(body) ? body : body.instances;",
+                  "    pm.expect(instances.length).to.be.above(0);",
+                  "    instances.forEach((i) => pm.expect(i.status).to.eql(\"up\"));",
+                  "});"
                 ]
               }
             }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
-            }
-          }
+          ]
         }
       ]
     },
@@ -77,8 +96,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
-                  "pm.test(\".error is \\\"Missing or invalid Authorization header.\\\"\", () => pm.expect(pm.response.json().error).to.eql(\"Missing or invalid Authorization header.\"));"
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"the Gateway answers UNAUTHORIZED\", () => pm.expect(pm.response.json().error).to.eql(\"UNAUTHORIZED\"));"
                 ]
               }
             }
@@ -100,15 +119,15 @@
           }
         },
         {
-          "name": "Player token is rejected",
+          "name": "Player token is rejected -> 404 (Gateway)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
-                  "pm.test(\".error is \\\"Invalid or expired service token.\\\"\", () => pm.expect(pm.response.json().error).to.eql(\"Invalid or expired service token.\"));"
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"the Gateway hides service-only routes from players\", () => pm.expect(pm.response.json().error).to.eql(\"ROUTE_NOT_FOUND\"));"
                 ]
               }
             }
@@ -1626,6 +1645,38 @@
           }
         }
       ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// A run starts at \"zombie-service is up in Service Discovery\": a fresh run_id (unique usernames, lobbies, operation ids), and the ids",
+          "// the previous run saved are forgotten, so two runs in a row never collide.",
+          "if (pm.info.requestName === \"zombie-service is up in Service Discovery\" || !pm.collectionVariables.get(\"run_id\")) {",
+          "    pm.collectionVariables.set(\"run_id\", Date.now().toString(36));",
+          "    [].forEach((key) => pm.collectionVariables.set(key, \"\"));",
+          "}",
+          "",
+          "// Every request goes through the API Gateway (base url). The Gateway checks each token: HS256, signed",
+          "// with JWT_SECRET (players) or SERVICE_JWT_SECRET (services, sub \"service:<name>\"). Put the stack's two",
+          "// values from .env into the collection variables jwt_secret and service_jwt_secret.",
+          "function base64url(wordArray) {",
+          "    return CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, \"-\").replace(/\\//g, \"_\").replace(/=+$/, \"\");",
+          "}",
+          "function signJWT(payload, secret) {",
+          "    const header = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify({ alg: \"HS256\", typ: \"JWT\" })));",
+          "    const body = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)));",
+          "    return header + \".\" + body + \".\" + base64url(CryptoJS.HmacSHA256(header + \".\" + body, secret));",
+          "}",
+          "const now = Math.floor(Date.now() / 1000);",
+          "",
+          "pm.collectionVariables.set(\"serviceToken\", signJWT({ sub: \"service:game-service\", roles: [\"service\"], type: \"service\", iat: now, exp: now + 300 }, pm.variables.get(\"service_jwt_secret\")));",
+          "pm.collectionVariables.set(\"playerToken\", signJWT({ sub: \"postman-player-\" + pm.collectionVariables.get(\"run_id\"), roles: [\"player\"], type: \"player\", iat: now, exp: now + 3600 }, pm.variables.get(\"jwt_secret\")));"
+        ]
+      }
     }
   ]
 }
