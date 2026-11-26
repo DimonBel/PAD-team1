@@ -26,6 +26,19 @@ Microservices are implemented using multiple technologies to optimize performanc
 
 Since Lab 4, the API Gateway is still the single entry point for clients, and the **Message Broker** carries every other hop. Clients call the Gateway, which checks the caller's JWT and hands each `/api/...` request to the broker. Services call each other only through the broker, over **gRPC**, and never name one another for events: they publish to a **topic**, and the broker delivers to every service that subscribed to it. Load balancing, retries and circuit breakers live in the broker, which learns each service's instances, gRPC addresses and topics from **Service Discovery**. Each of the eight services owns its domain and its own PostgreSQL database, and no service reads another's database.
 
+### Main diagram
+
+The whole platform on one page: the Gateway with its Redis cache, the Message Broker, Service Discovery, the eight services with their replicated databases, the data warehouse with the ETL, and the monitoring.
+
+![Main architecture diagram, v3](./docs/architecture-v3.png)
+
+<details>
+<summary>The same architecture, drawn by the team on a whiteboard</summary>
+
+![Architecture on the whiteboard, v3](./docs/architecture-v3-whiteboard.jpg)
+
+</details>
+
 ### System overview
 
 Every component of the stack and how they connect: the Gateway with its Redis cache, the Message Broker with the saga coordinator, Service Discovery, the eight services and their databases (replicated ones drawn as a stack), the data warehouse and the monitoring.
@@ -139,7 +152,7 @@ The WebSocket carries live events: presence, friends and trades from Player Serv
 <details>
 <summary>Lab 4 diagram, before the cache, replication and sagas</summary>
 
-![Architectural Diagram, Lab 4](./docs/diagram_new.jpg)
+![Architectural Diagram v2, Lab 4](./docs/architecture-v2.jpg)
 
 </details>
 
@@ -148,7 +161,7 @@ The WebSocket carries live events: presence, friends and trades from Player Serv
 
 In Lab 3, the Gateway also routed service-to-service calls over REST and balanced them between instances itself.
 
-![Architectural Diagram, Lab 3](./docs/architecture.jpg)
+![Architectural Diagram v1, Lab 3](./docs/architecture-v1.jpg)
 
 </details>
 
