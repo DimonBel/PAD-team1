@@ -19,15 +19,23 @@ headless with [Newman](https://github.com/postmanlabs/newman).
 
 `new-endpoints.postman_collection.json` runs against the whole `docker compose` stack: register and
 log in, the same GET twice (`X-Cache: MISS`, then `HIT`), `GET /cache/stats`, logout and the revoked
-token (`401 SESSION_REVOKED`), the broker's saga list, and an ETL run. Set `cache_admin_key`,
-`broker_admin_secret` and `etl_admin_key` from `.env` (`CACHE_ADMIN_KEY`, `BROKER_ADMIN_SECRET`,
-`ETL_ADMIN_KEY`); the cache answers need the Gateway in broker mode.
+token (`401 SESSION_REVOKED`), a saga started on its own, the broker's saga list, and an ETL run.
+Set `cache_admin_key`, `broker_admin_secret`, `etl_admin_key` and `jwt_secret` from `.env`
+(`CACHE_ADMIN_KEY`, `BROKER_ADMIN_SECRET`, `ETL_ADMIN_KEY`, `JWT_SECRET`); the cache answers need the
+Gateway in broker mode.
+
+The saga: as a moderator (a token the collection signs with `jwt_secret`) it creates a zone and a
+room and places a resource node there. world-service answers `201` and starts a `resource-node`
+saga, which the Message Broker runs: world `BeginNode`, resource `CreatePoint`, world
+`ActivateNode`. The next request asks the broker for that saga and checks it `completed` with the
+three steps done; it then shows in the broker's saga list and on Grafana's Sagas row.
 
 ```bash
 npx newman run postman/new-endpoints.postman_collection.json \
   --env-var "cache_admin_key=<CACHE_ADMIN_KEY>" \
   --env-var "broker_admin_secret=<BROKER_ADMIN_SECRET>" \
-  --env-var "etl_admin_key=<ETL_ADMIN_KEY>"
+  --env-var "etl_admin_key=<ETL_ADMIN_KEY>" \
+  --env-var "jwt_secret=<JWT_SECRET>"
 ```
 
 ## Before you run anything
