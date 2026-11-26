@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="1350" viewBox="0 0 1940 1350" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><marker id="m2f9e44" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#2f9e44"/></marker><marker id="m343a40" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#343a40"/></marker><marker id="m495057" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#495057"/></marker><marker id="md9480f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#d9480f"/></marker><marker id="mdee2e6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#dee2e6"/></marker><marker id="me03131" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#e03131"/></marker></defs>
+<rect width="1940" height="1350" fill="#ffffff"/>
+<text xml:space="preserve" style="white-space:pre" font-size="30" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="40.0" y="55.9">Long-running sagas · coordinated by the Message Broker</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#495057" text-anchor="start"><tspan x="40.0" y="86.0">The two operations that change both player-db and game-db; chosen instead of two-phase commit (db-replication/README.md, "Sagas")</tspan></text>
+<rect x="40.0" y="150.0" width="300.0" height="150.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="190.0" y="194.7">game-service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="190.0" y="218.2">zombie STEAL → starts zombie-steal</tspan><tspan x="190.0" y="234.5">session timer → starts session-end</tspan><tspan x="190.0" y="250.7">answers 200 with the result, or</tspan><tspan x="190.0" y="267.0">202 + saga_id while still running</tspan></text>
+<rect x="420.0" y="110.0" width="1060.0" height="235.0" rx="10.0" fill="#e5dbff" stroke="#5f3dc4" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="950.0" y="137.8">Message Broker · saga coordinator  (Message-Broker/src/sagas/)</tspan></text>
+<rect x="440.0" y="158.0" width="240.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="560.0" y="194.3">Saga log</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="560.0" y="215.9">sagas.sqlite, written before</tspan><tspan x="560.0" y="230.9">each call and after each answer</tspan></text>
+<rect x="698.0" y="158.0" width="240.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="818.0" y="194.3">Long-running retry</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="818.0" y="215.9">unreachable step: backoff</tspan><tspan x="818.0" y="230.9">1 s → 60 s, deadline 10 min</tspan></text>
+<rect x="956.0" y="158.0" width="240.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1076.0" y="194.3">Compensation</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1076.0" y="215.9">done steps undone in reverse</tspan><tspan x="1076.0" y="230.9">order, retried for up to 1 h</tspan></text>
+<rect x="1214.0" y="158.0" width="240.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#5f3dc4" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1334.0" y="194.3">Resume on restart</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="1334.0" y="215.9">running and compensating</tspan><tspan x="1334.0" y="230.9">sagas continue after a restart</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="950.0" y="291.2">Each step is an ordinary gRPC call through the broker (breakers, load balancing and reroute apply)</tspan><tspan x="950.0" y="306.2">and carries operation_id = saga:&lt;id&gt;:&lt;step&gt; (…:undo for a compensation), so a repeat changes nothing</tspan></text>
+<rect x="1560.0" y="115.0" width="340.0" height="100.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1730.0" y="150.9">player-service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1730.0" y="174.5">StealXp · AdjustXp</tspan><tspan x="1730.0" y="190.7">dedupes on its XP ledger</tspan></text>
+<rect x="1560.0" y="240.0" width="340.0" height="105.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1730.0" y="270.3">game-service</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1730.0" y="293.8">ApplySteal · BeginSessionEnd</tspan><tspan x="1730.0" y="310.1">RevertSessionEnd · FinishSession</tspan><tspan x="1730.0" y="326.3">dedupes on saga_operations</tspan></text>
+<path d="M340.0,225.0 L420.0,225.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<rect x="319.6" y="194.0" width="120.9" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="380.0" y="206.2">POST /v1/sagas/:type</tspan></text>
+<path d="M1480.0,165.0 L1560.0,165.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<path d="M1480.0,292.0 L1560.0,292.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<rect x="1500.8" y="220.0" width="38.5" height="31.5" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="1520.0" y="232.2">gRPC</tspan><tspan x="1520.0" y="246.0">steps</tspan></text>
+<rect x="40.0" y="380.0" width="1860.0" height="480.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="56.0" y="402.1">THE TWO SAGAS · solid = steps in order, dashed red = compensation</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="18" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="60.0" y="456.7">zombie-steal</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="60.0" y="478.1">a zombie takes XP</tspan><tspan x="60.0" y="494.3">from a player</tspan></text>
+<rect x="330.0" y="420.0" width="380.0" height="95.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="520.0" y="453.4">1 · player.StealXp</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="520.0" y="477.0">takes min(40, xp) under a row lock</tspan><tspan x="520.0" y="493.2">and answers how much was taken</tspan></text>
+<rect x="790.0" y="420.0" width="380.0" height="95.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="980.0" y="453.4">2 · game.ApplySteal(−taken)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="980.0" y="477.0">records it on session_players.xp</tspan><tspan x="980.0" y="493.2">last step</tspan></text>
+<path d="M710.0,467.0 L790.0,467.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<rect x="330.0" y="545.0" width="380.0" height="60.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="520.0" y="568.8">undo · player.AdjustXp(+taken)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="520.0" y="590.4">if step 2 is refused or runs out of time</tspan></text>
+<path d="M520.0,545.0 L520.0,515.0" fill="none" stroke="#e03131" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#me03131)"/>
+<rect x="1250.0" y="420.0" width="630.0" height="185.0" rx="10.0" fill="#ffffff" stroke="#adb5bd" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1264.0" y="465.3">Why a saga here</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1264.0" y="488.2">Before: game-service called player-service, then wrote its own</tspan><tspan x="1264.0" y="504.5">database. If that write failed, the XP was gone for good, and a</tspan><tspan x="1264.0" y="520.7">failed XP push at session end was only logged.</tspan><tspan x="1264.0" y="537.0">Now both changes happen, or the done ones are undone.</tspan><tspan x="1264.0" y="553.2">No lock is held across services while one of them is down,</tspan><tspan x="1264.0" y="569.5">which a two-phase commit would need.</tspan></text>
+<path d="M60.0,630.0 L1880.0,630.0" fill="none" stroke="#dee2e6" stroke-width="1.5" stroke-linejoin="round"/>
+<text xml:space="preserve" style="white-space:pre" font-size="18" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="60.0" y="686.7">session-end</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-family="SFMono-Regular, Menlo, Consolas, monospace"><tspan x="60.0" y="708.1">id session-end:&lt;session&gt;</tspan></text>
+<rect x="330.0" y="655.0" width="380.0" height="90.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="520.0" y="694.1">1 · game.BeginSessionEnd</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="520.0" y="717.6">RUNNING → ENDING (semantic lock)</tspan></text>
+<rect x="790.0" y="655.0" width="380.0" height="90.0" rx="10.0" fill="#d0ebff" stroke="#1864ab" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="980.0" y="694.1">2..n · player.AdjustXp(+xp)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="980.0" y="717.6">one step per surviving player</tspan></text>
+<rect x="1250.0" y="655.0" width="630.0" height="90.0" rx="10.0" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1565.0" y="685.9">last · game.FinishSession</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1565.0" y="709.5">FINISHED · actions cancelled · lobby closed</tspan><tspan x="1565.0" y="725.7">forward recovery: retried until done, never undone</tspan></text>
+<path d="M710.0,700.0 L790.0,700.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<path d="M1170.0,700.0 L1250.0,700.0" fill="none" stroke="#343a40" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m343a40)"/>
+<rect x="330.0" y="775.0" width="380.0" height="60.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="520.0" y="798.8">undo · game.RevertSessionEnd</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="520.0" y="820.4">ENDING → RUNNING</tspan></text>
+<rect x="790.0" y="775.0" width="380.0" height="60.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="980.0" y="798.8">undo · player.AdjustXp(−xp)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="980.0" y="820.4">takes the awarded XP back</tspan></text>
+<path d="M520.0,775.0 L520.0,745.0" fill="none" stroke="#e03131" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#me03131)"/>
+<path d="M980.0,775.0 L980.0,745.0" fill="none" stroke="#e03131" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#me03131)"/>
+<rect x="40.0" y="890.0" width="1080.0" height="410.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="56.0" y="912.1">SAGA STATES</tspan></text>
+<rect x="80.0" y="1050.0" width="170.0" height="52.0" rx="10.0" fill="#e5dbff" stroke="#5f3dc4" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="165.0" y="1080.9">running</tspan></text>
+<rect x="420.0" y="960.0" width="170.0" height="52.0" rx="10.0" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="505.0" y="990.9">completed</tspan></text>
+<rect x="420.0" y="1110.0" width="170.0" height="52.0" rx="10.0" fill="#fff3bf" stroke="#e67700" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="505.0" y="1140.9">compensating</tspan></text>
+<rect x="760.0" y="1110.0" width="170.0" height="52.0" rx="10.0" fill="#ffffff" stroke="#343a40" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="845.0" y="1140.9">compensated</tspan></text>
+<rect x="760.0" y="1220.0" width="170.0" height="52.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="845.0" y="1250.9">stuck</tspan></text>
+<rect x="960.0" y="1220.0" width="145.0" height="52.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1032.5" y="1241.3">dead letter</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="9" fill="#495057" text-anchor="middle"><tspan x="1032.5" y="1259.9">SAGA_COMPENSATION_FAILED</tspan></text>
+<path d="M250.0,1076.0 L330.0,1076.0 L330.0,986.0 L420.0,986.0" fill="none" stroke="#2f9e44" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m2f9e44)"/>
+<rect x="330.0" y="948.0" width="120.9" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="start"><tspan x="335.0" y="960.2">every step succeeded</tspan></text>
+<path d="M330.0,1076.0 L330.0,1136.0 L420.0,1136.0" fill="none" stroke="#d9480f" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#md9480f)"/>
+<rect x="59.7" y="1158.0" width="220.5" height="45.2" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="170.0" y="1170.2">business refusal (INVALID_ARGUMENT,</tspan><tspan x="170.0" y="1184.0">NOT_FOUND, FAILED_PRECONDITION…)</tspan><tspan x="170.0" y="1197.7">or step deadline passed</tspan></text>
+<path d="M590.0,1136.0 L760.0,1136.0" fill="none" stroke="#2f9e44" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m2f9e44)"/>
+<rect x="644.3" y="1110.0" width="61.4" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="675.0" y="1122.2">all undone</tspan></text>
+<path d="M505.0,1162.0 L505.0,1246.0 L760.0,1246.0" fill="none" stroke="#e03131" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#me03131)"/>
+<rect x="556.1" y="1250.0" width="151.8" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="632.0" y="1262.2">compensation deadline (1 h)</tspan></text>
+<path d="M930.0,1246.0 L960.0,1246.0" fill="none" stroke="#e03131" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#me03131)"/>
+<path d="M845.0,1220.0 L845.0,1190.0 L560.0,1190.0 L560.0,1162.0" fill="none" stroke="#495057" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="9 6" marker-end="url(#m495057)"/>
+<rect x="616.0" y="1180.0" width="168.1" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="700.0" y="1192.2">POST /v1/admin/sagas/:id/retry</tspan></text>
+<path d="M120.0,1050.0 L120.0,1015.0 L210.0,1015.0 L210.0,1050.0" fill="none" stroke="#495057" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m495057)"/>
+<rect x="76.1" y="993.0" width="177.9" height="17.8" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#495057" text-anchor="middle"><tspan x="165.0" y="1005.2">participant down → retry 1 s…60 s</tspan></text>
+<rect x="1160.0" y="890.0" width="740.0" height="410.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="1176.0" y="912.1">ISOLATION, IDEMPOTENCY AND API</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1180.0" y="948.0">Isolation (sagas have none of their own)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1180.0" y="970.1">• ENDING is a semantic lock: no new actions, steals or cycle ticks</tspan><tspan x="1180.0" y="986.3">• XP changes are commutative deltas (+x / −x)</tspan><tspan x="1180.0" y="1002.6">• player-service decides 'taken' under SELECT … FOR UPDATE</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1180.0" y="1045.0">Idempotency</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1180.0" y="1067.1">• operation_id on every call: player XP ledger, game saga_operations</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1180.0" y="1103.0">Broker API</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-family="SFMono-Regular, Menlo, Consolas, monospace"><tspan x="1180.0" y="1124.2">POST /v1/sagas/:type?wait_ms     start (service token)</tspan><tspan x="1180.0" y="1139.2">GET  /v1/sagas/:id               state, steps, last errors</tspan><tspan x="1180.0" y="1154.2">GET  /v1/admin/sagas             list (admin secret)</tspan><tspan x="1180.0" y="1169.2">POST /v1/admin/sagas/:id/retry   retry a stuck saga</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1180.0" y="1217.1">Metrics broker_sagas_* → Grafana 'Sagas' row</tspan><tspan x="1180.0" y="1233.3">Tests: Message-Broker/test/sagas.test.ts</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="1330.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/05-sagas.excalidraw (open at excalidraw.com) · state of the repository, November 2026</tspan></text>
+</svg>

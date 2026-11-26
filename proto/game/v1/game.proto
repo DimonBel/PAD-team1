@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+// Game Service: the calls other services make to it. Each RPC is the gRPC form of the REST
+// endpoint named above it, with the same fields. These are the three endpoints the Communication
+// Contract marks as called by another service (the Zombie Service tick and its zombies); the rest
+// of the API is for players and stays on REST through the Gateway.
+package game.v1;
+
+service Games {
+  // POST /api/game/lobbies/{lobby_id}/encounters
+  // A zombie met a player. A professor zombie makes Game Service ask Exam Service for an exam.
+  rpc PushEncounter(PushEncounterRequest) returns (Encounter);
+
+  // POST /api/game/lobbies/{lobby_id}/cycle
+  // Moves the lobby's running session to the next day/night phase without waiting for its timer.
+  rpc AdvanceCycle(AdvanceCycleRequest) returns (CycleAdvanced);
+
+  // POST /api/sessions/{session_id}/zombie-actions
+  // REST answers 202 for ADMINISTER_EXAM and 200 for STEAL; here `status` tells them apart:
+  // IN_PROGRESS or COMPLETED.
+  rpc ZombieAction(ZombieActionRequest) returns (ZombieActionResult);
+
+  // Lab 5: saga steps, called by the Message Broker as the saga coordinator. Each is idempotent
+  // by operation_id: a repeat answers what the first call answered and changes nothing.
+  // zombie-steal, step 2: the player's session XP changes by xp_delta (negative).
+  rpc ApplySteal(ApplyStealRequest) returns (SagaStepResult);
+  // session-end, step 1 and its compensation: RUNNING -> ENDING (no new actions), and back.
+  rpc BeginSessionEnd(SessionEndRequest) returns (SagaStepResult);
+  rpc RevertSessionEnd(SessionEndRequest) returns (SagaStepResult);
+  // session-end, last step: FINISHED, actions cancelled, lobby closed.
+  rpc FinishSession(SessionEndRequest) returns (SagaStepResult);
+}
+
+message PushEncounterRequest {
+  string lobby_id = 1;
+  // student_zombie when it is left out.
+  optional string zombie_type = 2;
+  optional string player_id = 3;
+  optional string room_id = 4;
+  // A persisted zombie of the current cycle. Left out for a zombie that was never persisted.
+  optional string zombie_id = 5;
+}
+
+message Encounter {
+  string encounter_id = 1;
+  bool exam_requested = 2;
+  // Set when exam_requested is true.
+  optional string exam_id = 3;
+}
+
+message AdvanceCycleRequest {
+  string lobby_id = 1;
+}
+
+message CycleAdvanced {
+  string session_id = 1;
+  string lobby_id = 2;
+  // day or night
+  string phase = 3;
+  // Cycle number, counted from 1.
+  int32 day = 4;
+  // RUNNING or FINISHED
+  string status = 5;
+  // ISO 8601
+  string cycle_ends_at = 6;
+}
+
+message ZombieActionRequest {
+  string session_id = 1;
+  // ADMINISTER_EXAM or STEAL. The zombie's own default when it is left out.
+  optional string action = 2;
+  optional string zombie_id = 3;
+  optional string target_player_id = 4;
+  optional string room_id = 5;
+  // XP or an item name. XP when it is left out.
+  optional string steal_target = 6;
+}
+
+message ZombieActionResult {
+  string action_id = 1;
+  // IN_PROGRESS (ADMINISTER_EXAM) or COMPLETED (STEAL)
+  string status = 2;
+  // ADMINISTER_EXAM only.
+  optional string exam_id = 3;
+  optional int32 deadline_seconds = 4;
+  // STEAL only.
+  optional Stolen stolen = 5;
+}
+
+message Stolen {
+  // XP or the item type asked for.
+  string type = 1;
+  int64 amount = 2;
+}
+
+message ApplyStealRequest {
+  string operation_id = 1;
+  string session_id = 2;
+  string player_id = 3;
+  int64 xp_delta = 4;
+}
+
+message SessionEndRequest {
+  string operation_id = 1;
+  string session_id = 2;
+}
+
+message SagaStepResult {
+  // What the step did: "applied", or "replayed" for a repeat.
+  string status = 1;
+}

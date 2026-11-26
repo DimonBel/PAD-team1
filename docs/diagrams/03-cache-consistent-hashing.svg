@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="1290" viewBox="0 0 1940 1290" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><marker id="m1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#1e1e1e"/></marker></defs>
+<rect width="1940" height="1290" fill="#ffffff"/>
+<text xml:space="preserve" style="white-space:pre" font-size="30" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="40.0" y="55.9">Gateway cache · sharded by consistent hashing</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#495057" text-anchor="start"><tspan x="40.0" y="86.0">GET answers and sessions in 3 independent Redis nodes; the Gateway's own hash ring decides which node holds each key (Gateway-team1/docs/CONSISTENT_HASHING.md)</tspan></text>
+<rect x="40.0" y="110.0" width="620.0" height="640.0" rx="14.0" fill="#fff3bf" fill-opacity="0.35" stroke="#e67700" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#e67700" text-anchor="start" font-weight="700"><tspan x="56.0" y="132.1">API GATEWAY · Gateway-team1/src/cache/</tspan></text>
+<rect x="60.0" y="150.0" width="580.0" height="125.0" rx="10.0" fill="#ffffff" stroke="#e67700" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="350.0" y="183.8">Sessions (authentication data)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="350.0" y="205.4">login → gw:session:&lt;jti&gt; = { player_id, roles, opened_at }</tspan><tspan x="350.0" y="220.4">every request reads it: revoked → 401 SESSION_REVOKED</tspan><tspan x="350.0" y="235.4">POST /api/players/logout marks the session revoked</tspan><tspan x="350.0" y="250.4">miss → rebuilt from the signed token (nobody is logged out)</tspan></text>
+<rect x="60.0" y="295.0" width="580.0" height="125.0" rx="10.0" fill="#ffffff" stroke="#e67700" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="350.0" y="328.8">GET-answer cache</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="350.0" y="350.4">rules per route in config/routes.json (TTL 15–300 s)</tspan><tspan x="350.0" y="365.4">key gw:resp:&lt;service&gt;:g&lt;generation&gt;:&lt;scope&gt;:&lt;path?query&gt;</tspan><tspan x="350.0" y="380.4">scope roles = shared catalogue · caller = one player only</tspan><tspan x="350.0" y="395.4">only 200 answers · X-Cache: HIT / MISS / BYPASS</tspan></text>
+<rect x="60.0" y="440.0" width="580.0" height="90.0" rx="10.0" fill="#ffffff" stroke="#e67700" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="350.0" y="471.3">Invalidation</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="350.0" y="492.9">a 2xx POST / PUT / PATCH / DELETE gives the service a new random</tspan><tspan x="350.0" y="507.9">generation gw:gen:&lt;service&gt;, so older keys are never read again</tspan></text>
+<rect x="60.0" y="560.0" width="580.0" height="170.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="350.0" y="606.6">HashRing + ShardedStore</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="350.0" y="630.1">every key above goes through it</tspan><tspan x="350.0" y="646.3">MD5 → 32-bit position · 160 virtual nodes per Redis node</tspan><tspan x="350.0" y="662.6">binary search: the first node point clockwise owns the key</tspan><tspan x="350.0" y="678.8">owner down → the next distinct node clockwise</tspan><tspan x="350.0" y="695.1">one Redis connection per node · 250 ms command timeout</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="950.0" y="135.8">The ring: 2³² positions (MD5)</tspan></text>
+<ellipse cx="950.0" cy="420.0" rx="215.0" ry="215.0" fill="#ffffff" stroke="#adb5bd" stroke-width="3"/>
+<ellipse cx="1134.8" cy="310.2" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1029.3" cy="619.9" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="745.0" cy="484.8" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1117.8" cy="285.5" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="760.0" cy="520.5" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1163.5" cy="445.1" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1126.6" cy="542.6" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1013.3" cy="214.5" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1109.3" cy="275.6" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="801.9" cy="264.1" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1165.0" cy="415.9" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="945.1" cy="634.9" rx="8.0" ry="8.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1143.6" cy="513.6" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="739.3" cy="462.8" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1102.9" cy="268.9" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="806.3" cy="260.1" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1140.4" cy="320.1" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="811.8" cy="255.3" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="928.5" cy="633.9" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="809.3" cy="257.5" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="735.4" cy="433.7" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1118.6" cy="286.6" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="742.1" cy="365.3" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="788.1" cy="561.5" rx="8.0" ry="8.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1100.1" cy="266.1" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="828.6" cy="242.5" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="933.6" cy="205.6" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1123.1" cy="292.5" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="747.3" cy="491.6" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1145.3" cy="509.9" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="783.4" cy="284.1" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="760.1" cy="319.1" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="878.4" cy="217.3" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="1087.8" cy="585.0" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="862.6" cy="223.6" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="764.0" cy="527.8" rx="8.0" ry="8.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<rect x="1154.2" y="438.6" width="18.0" height="18.0" rx="2.0" fill="#1e1e1e" stroke="#ffffff" stroke-width="2"/>
+<path d="M1129.5,443.3 L1129.0,446.7 L1128.5,450.0 L1127.9,453.4 L1127.2,456.8 L1126.5,460.1 L1125.7,463.4 L1124.9,466.7 L1123.9,470.0 L1123.0,473.3 L1121.9,476.6 L1120.8,479.8 L1119.7,483.0 L1118.4,486.2 L1117.2,489.4 L1115.8,492.6 L1114.4,495.7" fill="none" stroke="#1e1e1e" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#m1e1e1e)"/>
+<rect x="1184.0" y="441.0" width="133.4" height="49.0" rx="4.0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start"><tspan x="1189.0" y="454.1">key …/api/world/map</tspan><tspan x="1189.0" y="469.1">→ first point clockwise</tspan><tspan x="1189.0" y="484.1">→ owned by cache-3</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="950.0" y="410.1">12 of the 160 points</tspan><tspan x="950.0" y="426.3">per node are drawn</tspan></text>
+<rect x="1390.0" y="180.0" width="510.0" height="135.0" rx="10.0" fill="#d0ebff" stroke="#1c7ed6" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1404.0" y="225.3">cache-1   redis://cache-1:6379</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1404.0" y="248.8">Redis 7.4 · maxmemory 64 MB · allkeys-lru</tspan><tspan x="1404.0" y="265.1">nothing on disk: a restarted node starts empty</tspan><tspan x="1404.0" y="281.3">live test: holds 48 of 150 cached answers</tspan></text>
+<ellipse cx="1879.0" cy="203.0" rx="9.0" ry="9.0" fill="#1c7ed6" stroke="#ffffff" stroke-width="2"/>
+<rect x="1390.0" y="345.0" width="510.0" height="135.0" rx="10.0" fill="#ffe8cc" stroke="#e8590c" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1404.0" y="390.3">cache-2   redis://cache-2:6379</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1404.0" y="413.8">Redis 7.4 · maxmemory 64 MB · allkeys-lru</tspan><tspan x="1404.0" y="430.1">nothing on disk: a restarted node starts empty</tspan><tspan x="1404.0" y="446.3">live test: holds 52 of 150 cached answers</tspan></text>
+<ellipse cx="1879.0" cy="368.0" rx="9.0" ry="9.0" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<rect x="1390.0" y="510.0" width="510.0" height="135.0" rx="10.0" fill="#d3f9d8" stroke="#2f9e44" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1404.0" y="555.3">cache-3   redis://cache-3:6379</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1404.0" y="578.8">Redis 7.4 · maxmemory 64 MB · allkeys-lru</tspan><tspan x="1404.0" y="595.1">nothing on disk: a restarted node starts empty</tspan><tspan x="1404.0" y="611.3">live test: holds 50 of 150 cached answers</tspan></text>
+<ellipse cx="1879.0" cy="533.0" rx="9.0" ry="9.0" fill="#2f9e44" stroke="#ffffff" stroke-width="2"/>
+<rect x="40.0" y="790.0" width="620.0" height="460.0" rx="14.0" fill="#ffe3e3" fill-opacity="0.35" stroke="#c92a2a" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#c92a2a" text-anchor="start" font-weight="700"><tspan x="56.0" y="812.1">WHEN A NODE GOES DOWN (live stack, deploy/cache-e2e.test.mjs)</tspan></text>
+<rect x="60.0" y="840.0" width="285.0" height="140.0" rx="10.0" fill="#fff3bf" stroke="#e67700" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="202.5" y="895.6">cache-2 stops</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="202.5" y="918.8">its keys (≈ ⅓) fall through to the next</tspan><tspan x="202.5" y="935.1">node clockwise and miss once</tspan></text>
+<rect x="355.0" y="840.0" width="285.0" height="140.0" rx="10.0" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="497.5" y="895.6">the rest keeps hitting</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="497.5" y="918.8">98 of 98 other cached answers</tspan><tspan x="497.5" y="935.1">still answer X-Cache: HIT</tspan></text>
+<rect x="60.0" y="1000.0" width="285.0" height="140.0" rx="10.0" fill="#d3f9d8" stroke="#2b8a3e" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="202.5" y="1055.6">cache-2 comes back</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="202.5" y="1078.8">its keys return to it (one miss</tspan><tspan x="202.5" y="1095.1">each); temporary copies expire</tspan></text>
+<rect x="355.0" y="1000.0" width="285.0" height="140.0" rx="10.0" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="16" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="497.5" y="1055.6">all three nodes down</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="497.5" y="1078.8">X-Cache: BYPASS, tokens still</tspan><tspan x="497.5" y="1095.1">accepted, logout answers 503</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="60.0" y="1182.1">HIT ≈ 2 ms · MISS ≈ 50–60 ms (GET /api/zombies/types)</tspan><tspan x="60.0" y="1198.3">Cache down never breaks a request: it fails open.</tspan></text>
+<rect x="700.0" y="790.0" width="500.0" height="460.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="716.0" y="812.1">KEYS THAT MOVE (30,000 keys, unit tests)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="720.0" y="863.0">one node of 3 removed</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="720.0" y="897.2">our ring</tspan></text>
+<rect x="820.0" y="880.0" width="105.9" height="28.0" rx="4.0" fill="#2f9e44" stroke="#2f9e44" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="933.9" y="898.1">33.1 %</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="720.0" y="941.2">hash mod N</tspan></text>
+<rect x="820.0" y="924.0" width="213.8" height="28.0" rx="4.0" fill="#c92a2a" stroke="#c92a2a" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1041.8" y="942.1">66.8 %</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="14" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="720.0" y="1013.0">a 4th node added</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="720.0" y="1047.2">our ring</tspan></text>
+<rect x="820.0" y="1030.0" width="76.5" height="28.0" rx="4.0" fill="#2f9e44" stroke="#2f9e44" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="904.5" y="1048.1">23.9 %</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="720.0" y="1091.2">hash mod N</tspan></text>
+<rect x="820.0" y="1074.0" width="239.7" height="28.0" rx="4.0" fill="#c92a2a" stroke="#c92a2a" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1067.7" y="1092.1">74.9 %</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="720.0" y="1172.1">Balance, 160 vnodes: largest ÷ smallest node = 1.07</tspan><tspan x="720.0" y="1188.3">(with 1 vnode per node it is 19.45)</tspan></text>
+<rect x="1240.0" y="790.0" width="660.0" height="460.0" rx="14.0" fill="#fcfcfd" stroke="#adb5bd" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start" font-weight="700"><tspan x="1256.0" y="812.1">OUR RING vs REDIS CLUSTER (the comparison grade 6 asks for)</tspan></text>
+<rect x="1260.0" y="840.0" width="620.0" height="34.0" rx="0.0" fill="#e9ecef" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="860.7"></tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1420.0" y="860.7">Our ring (in the Gateway)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1660.0" y="860.7">Redis Cluster</tspan></text>
+<rect x="1260.0" y="874.0" width="620.0" height="34.0" rx="0.0" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="894.7">Key → shard</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1420.0" y="894.7">MD5 on a 2³² ring</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1660.0" y="894.7">CRC16(key) mod 16384 slots</tspan></text>
+<rect x="1260.0" y="908.0" width="620.0" height="34.0" rx="0.0" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="928.7">Who has the map</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1420.0" y="928.7">only the Gateway</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1660.0" y="928.7">every node (cluster bus)</tspan></text>
+<rect x="1260.0" y="942.0" width="620.0" height="34.0" rx="0.0" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="962.7">Balance</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1420.0" y="962.7">statistical, ±3–4 %</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1660.0" y="962.7">exact by slot count</tspan></text>
+<rect x="1260.0" y="976.0" width="620.0" height="34.0" rx="0.0" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="996.7">Add a node</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1420.0" y="996.7">automatic, keys start cold</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1660.0" y="996.7">manual reshard, data copied</tspan></text>
+<rect x="1260.0" y="1010.0" width="620.0" height="34.0" rx="0.0" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="1030.7">A node fails</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1420.0" y="1030.7">next node takes its keys</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1660.0" y="1030.7">its replica is promoted</tspan></text>
+<rect x="1260.0" y="1044.0" width="620.0" height="34.0" rx="0.0" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="1064.7">Data on failure</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1420.0" y="1064.7">lost (only a cache)</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1660.0" y="1064.7">kept if the replica had it</tspan></text>
+<rect x="1260.0" y="1078.0" width="620.0" height="34.0" rx="0.0" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1270.0" y="1098.7">Moving parts</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1420.0" y="1098.7">3 plain redis-server</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="1660.0" y="1098.7">cluster mode + replicas</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1260.0" y="1142.1">Why the ring fits here: cached data can always be fetched</tspan><tspan x="1260.0" y="1158.3">again, the Gateway is the only client, and a lost node</tspan><tspan x="1260.0" y="1174.6">costs a third of the hits instead of an outage.</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="1270.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/03-cache-consistent-hashing.excalidraw (open at excalidraw.com) · state of the repository, November 2026</tspan></text>
+</svg>

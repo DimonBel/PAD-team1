@@ -1,0 +1,589 @@
+{
+  "info": {
+    "name": "PAD-team1: cache, sessions, sagas, ETL",
+    "description": "The newest endpoints (cache, sessions, sagas, ETL), through the running docker compose stack. Set cache_admin_key, broker_admin_secret, etl_admin_key and jwt_secret from .env (CACHE_ADMIN_KEY, BROKER_ADMIN_SECRET, ETL_ADMIN_KEY, JWT_SECRET), then run the folders in order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Sessions and cache (Gateway)",
+      "item": [
+        {
+          "name": "Register a player",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('username', 'endpoints_' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('player_id', pm.response.json().player_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/players/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"email\": \"{{username}}@test.io\",\n  \"password\": \"Endpoints-pass-123\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Log in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 with a jwt', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().jwt).to.be.a('string'); });",
+                  "pm.collectionVariables.set('player_jwt', pm.response.json().jwt);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/players/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{username}}@test.io\",\n  \"password\": \"Endpoints-pass-123\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET a cached route, first time",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Cache is MISS or HIT', () => pm.expect(pm.response.headers.get('X-Cache')).to.be.oneOf(['MISS', 'HIT']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{player_jwt}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/zones"
+          },
+          "response": []
+        },
+        {
+          "name": "GET the same route again: served from Redis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Cache: HIT', () => pm.expect(pm.response.headers.get('X-Cache')).to.eql('HIT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{player_jwt}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/zones"
+          },
+          "response": []
+        },
+        {
+          "name": "Cache stats (needs CACHE_ADMIN_KEY)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 with three nodes', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().nodes).to.have.lengthOf(3); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Key",
+                "value": "{{cache_admin_key}}"
+              }
+            ],
+            "url": "{{gateway_url}}/cache/stats"
+          },
+          "response": []
+        },
+        {
+          "name": "Log out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 no content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{player_jwt}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/players/logout"
+          },
+          "response": []
+        },
+        {
+          "name": "The same token after logout is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 SESSION_REVOKED', () => { pm.response.to.have.status(401); pm.expect(JSON.stringify(pm.response.json())).to.include('SESSION_REVOKED'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{player_jwt}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/players/{{player_id}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sagas (Message Broker)",
+      "item": [
+        {
+          "name": "Start a saga 1/4: create a zone (moderator)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A moderator token, signed here with JWT_SECRET (jwt_secret) like the world and exam",
+                  "// collections do: only a moderator may place resource nodes, and nobody registers as one.",
+                  "const cryptoJs = require('crypto-js');",
+                  "function b64url(words) {",
+                  "    return cryptoJs.enc.Base64.stringify(words).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                  "}",
+                  "const secret = pm.variables.get('jwt_secret');",
+                  "if (!secret) throw new Error('Set jwt_secret to JWT_SECRET from .env');",
+                  "const now = Math.floor(Date.now() / 1000);",
+                  "const head = b64url(cryptoJs.enc.Utf8.parse(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));",
+                  "const body = b64url(cryptoJs.enc.Utf8.parse(JSON.stringify({",
+                  "    sub: pm.variables.replaceIn('{{$guid}}'), roles: ['player', 'moderator'], iat: now, exp: now + 3600",
+                  "})));",
+                  "pm.collectionVariables.set('moderator_jwt', head + '.' + body + '.' + b64url(cryptoJs.HmacSHA256(head + '.' + body, secret)));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('saga_zone_id', pm.response.json().zone_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{moderator_jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/zones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Saga zone {{$timestamp}}\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start a saga 2/4: create a room in it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('saga_room_id', pm.response.json().room_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{moderator_jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/rooms",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone_id\": \"{{saga_zone_id}}\",\n  \"type\": \"laboratory\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start a saga 3/4: place a resource node, world starts a resource-node saga",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('node_id', pm.response.json().node_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{moderator_jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/rooms/{{saga_room_id}}/resource-nodes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"wood\",\n  \"initial_yield\": 40\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start a saga 4/4: the resource-node saga completed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const saga = pm.response.json();",
+                  "pm.test('completed', () => pm.expect(saga.state).to.eql('completed'));",
+                  "pm.test('begin, create-point and activate are done', () => pm.expect(saga.steps.map((s) => s.name + ':' + s.status))",
+                  "    .to.eql(['begin:done', 'create-point:done', 'activate:done']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-broker-admin-secret",
+                "value": "{{broker_admin_secret}}"
+              }
+            ],
+            "url": "{{broker_url}}/v1/sagas/resource-node:{{node_id}}?wait_ms=15000"
+          },
+          "response": []
+        },
+        {
+          "name": "The broker lists it with the resource-node sagas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 and listed', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().sagas.map((s) => s.saga_id)).to.include('resource-node:' + pm.collectionVariables.get('node_id'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-broker-admin-secret",
+                "value": "{{broker_admin_secret}}"
+              }
+            ],
+            "url": "{{broker_url}}/v1/admin/sagas?type=resource-node&limit=5"
+          },
+          "response": []
+        },
+        {
+          "name": "List completed zombie-steal sagas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-broker-admin-secret",
+                "value": "{{broker_admin_secret}}"
+              }
+            ],
+            "url": "{{broker_url}}/v1/admin/sagas?type=zombie-steal&limit=5"
+          },
+          "response": []
+        },
+        {
+          "name": "Without the admin secret the list is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 or 403', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/v1/admin/sagas"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Data warehouse (ETL)",
+      "item": [
+        {
+          "name": "ETL health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 ok', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('ok'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{etl_url}}/health"
+          },
+          "response": []
+        },
+        {
+          "name": "Run the ETL now",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 started or queued', () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Key",
+                "value": "{{etl_admin_key}}"
+              }
+            ],
+            "url": "{{etl_url}}/v1/runs"
+          },
+          "response": []
+        },
+        {
+          "name": "Last runs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{etl_url}}/v1/runs?limit=5"
+          },
+          "response": []
+        },
+        {
+          "name": "Rows per warehouse table",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 with tables', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().tables).to.not.be.empty; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{etl_url}}/v1/warehouse"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "broker_url",
+      "value": "http://localhost:8090"
+    },
+    {
+      "key": "etl_url",
+      "value": "http://localhost:8100"
+    },
+    {
+      "key": "cache_admin_key",
+      "value": ""
+    },
+    {
+      "key": "broker_admin_secret",
+      "value": ""
+    },
+    {
+      "key": "etl_admin_key",
+      "value": ""
+    },
+    {
+      "key": "username",
+      "value": ""
+    },
+    {
+      "key": "player_id",
+      "value": ""
+    },
+    {
+      "key": "player_jwt",
+      "value": ""
+    },
+    {
+      "key": "jwt_secret",
+      "value": ""
+    },
+    {
+      "key": "moderator_jwt",
+      "value": ""
+    },
+    {
+      "key": "saga_zone_id",
+      "value": ""
+    },
+    {
+      "key": "saga_room_id",
+      "value": ""
+    },
+    {
+      "key": "node_id",
+      "value": ""
+    }
+  ]
+}

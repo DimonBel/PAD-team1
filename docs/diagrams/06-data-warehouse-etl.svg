@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1940" height="1090" viewBox="0 0 1940 1090" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><marker id="m862e9c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="13" markerHeight="13" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0.5 L10,5 L0,9.5 z" fill="#862e9c"/></marker></defs>
+<rect width="1940" height="1090" fill="#ffffff"/>
+<text xml:space="preserve" style="white-space:pre" font-size="30" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="40.0" y="55.9">Data warehouse and ETL</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#495057" text-anchor="start"><tspan x="40.0" y="86.0">etl-service copies the 8 service databases into one star schema in warehouse-db, incrementally, every 60 seconds (etl-service/README.md)</tspan></text>
+<rect x="40.0" y="110.0" width="360.0" height="720.0" rx="14.0" fill="#c5f6fa" fill-opacity="0.35" stroke="#0b7285" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#0b7285" text-anchor="start" font-weight="700"><tspan x="56.0" y="132.1">SOURCES · read-only connections</tspan></text>
+<rect x="67.0" y="153.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="60.0" y="160.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="187.1">player-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="209.0">Patroni replica · player-db:5433</tspan></text>
+<path d="M380.0,193.0 L430.0,193.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<rect x="67.0" y="233.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="60.0" y="240.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="267.1">game-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="289.0">Patroni replica · game-db:5433</tspan></text>
+<path d="M380.0,273.0 L430.0,273.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<rect x="67.0" y="313.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="60.0" y="320.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="347.1">zombie-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="369.0">Patroni replica · zombie-db:5433</tspan></text>
+<path d="M380.0,353.0 L430.0,353.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<rect x="67.0" y="393.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="1.5"/>
+<rect x="60.0" y="400.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="427.1">resource-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="449.0">Patroni replica · resource-db:5433</tspan></text>
+<path d="M380.0,433.0 L430.0,433.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<rect x="60.0" y="480.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="507.1">exam-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="529.0">single node · exam-db:5432</tspan></text>
+<path d="M380.0,513.0 L430.0,513.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<rect x="60.0" y="560.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="587.1">world-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="609.0">single node · world-db:5432</tspan></text>
+<path d="M380.0,593.0 L430.0,593.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<rect x="60.0" y="640.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="667.1">base-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="689.0">single node · base-db:5432</tspan></text>
+<path d="M380.0,673.0 L430.0,673.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<rect x="60.0" y="720.0" width="320.0" height="66.0" rx="10.0" fill="#c5f6fa" stroke="#0b7285" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="220.0" y="747.1">crafting-db</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="middle"><tspan x="220.0" y="769.0">single node · crafting-db:5432</tspan></text>
+<path d="M380.0,753.0 L430.0,753.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<path d="M430.0,193.0 L430.0,753.0" fill="none" stroke="#862e9c" stroke-width="2" stroke-linejoin="round"/>
+<path d="M430.0,204.0 L530.0,204.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="500.0" y="110.0" width="760.0" height="720.0" rx="14.0" fill="#f3d9fa" fill-opacity="0.35" stroke="#862e9c" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#862e9c" text-anchor="start" font-weight="700"><tspan x="516.0" y="132.1">etl-service  :8100 · TypeScript (Fastify + pg)</tspan></text>
+<rect x="530.0" y="160.0" width="600.0" height="88.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="544.0" y="189.9">1  Extract</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="544.0" y="213.5">rows changed since the table's watermark, in keyset pages,</tspan><tspan x="544.0" y="229.7">5 s overlap · tables without a timestamp are read in full</tspan></text>
+<rect x="530.0" y="266.0" width="600.0" height="88.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="544.0" y="295.9">2  Transform rows</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="544.0" y="319.5">JSON stored as text → jsonb (bad JSON counted)</tspan><tspan x="544.0" y="335.7">players.password_hash is dropped, never copied</tspan></text>
+<path d="M830.0,248.0 L830.0,266.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="530.0" y="372.0" width="600.0" height="88.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="544.0" y="401.9">3  Load staging</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="544.0" y="425.5">upsert into staging.rows (source, table, pk, row jsonb);</tspan><tspan x="544.0" y="441.7">a row identical to the staged one is skipped</tspan></text>
+<path d="M830.0,354.0 L830.0,372.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="530.0" y="478.0" width="600.0" height="88.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="544.0" y="507.9">4  Build the star schema</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="544.0" y="531.5">one SQL upsert per dw table (warehouse-model.ts): types,</tspan><tspan x="544.0" y="547.7">UTC, date_key, old and new column names</tspan></text>
+<path d="M830.0,460.0 L830.0,478.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="530.0" y="584.0" width="600.0" height="88.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="544.0" y="622.1">5  Move the watermark</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="544.0" y="645.6">to the highest cursor value loaded</tspan></text>
+<path d="M830.0,566.0 L830.0,584.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="530.0" y="690.0" width="700.0" height="125.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="544.0" y="716.6">Runs</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="12" fill="#495057" text-anchor="start"><tspan x="544.0" y="738.5">steps 3–5: one warehouse transaction per table, so a failure rolls back only that table</tspan><tspan x="544.0" y="753.5">every ETL_INTERVAL_S = 60 s, and on POST /v1/runs (X-Admin-Key)</tspan><tspan x="544.0" y="768.5">every 10 runs: reconcile, rows gone from a source → is_deleted = true</tspan><tspan x="544.0" y="783.5">one run at a time (advisory lock) · a source that is down fails only its tables</tspan><tspan x="544.0" y="798.5">GET /health · GET /metrics</tspan></text>
+<rect x="1320.0" y="110.0" width="580.0" height="720.0" rx="14.0" fill="#f3d9fa" fill-opacity="0.35" stroke="#862e9c" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#862e9c" text-anchor="start" font-weight="700"><tspan x="1336.0" y="132.1">warehouse-db  :5440 · PostgreSQL 16</tspan></text>
+<rect x="1340.0" y="160.0" width="540.0" height="70.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1354.0" y="189.1">staging.rows</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1354.0" y="212.6">every source row as JSON</tspan></text>
+<rect x="1340.0" y="250.0" width="540.0" height="140.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1354.0" y="289.7">dw · 12 dimensions</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1354.0" y="313.2">dim_player · dim_lobby · dim_course · dim_exam</tspan><tspan x="1354.0" y="329.5">dim_map · dim_zone · dim_room · dim_base</tspan><tspan x="1354.0" y="345.7">dim_upgrade · dim_recipe · dim_zombie_type</tspan><tspan x="1354.0" y="362.0">dim_date (2024–2030)</tspan></text>
+<rect x="1340.0" y="410.0" width="540.0" height="160.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1354.0" y="451.6">dw · 23 fact tables</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1354.0" y="475.1">XP changes · inventory · trades · friendships</tspan><tspan x="1354.0" y="491.3">lobby players · sessions · actions · encounters</tspan><tspan x="1354.0" y="507.6">exam attempts · grades · resource nodes</tspan><tspan x="1354.0" y="523.8">base rooms · facilities · Kiki · craft jobs</tspan><tspan x="1354.0" y="540.1">zombies · loot · resource points · transactions</tspan></text>
+<rect x="1340.0" y="590.0" width="540.0" height="90.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1354.0" y="620.9">dw · analytics views</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1354.0" y="644.5">v_player_progress · v_exam_pass_rate</tspan><tspan x="1354.0" y="660.7">v_daily_activity · v_orphans (data quality)</tspan></text>
+<rect x="1340.0" y="700.0" width="540.0" height="100.0" rx="10.0" fill="#ffffff" stroke="#862e9c" stroke-width="1.5"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="start" font-weight="700"><tspan x="1354.0" y="744.1">etl schema</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="1354.0" y="767.6">runs · watermarks · migrations</tspan></text>
+<path d="M1130.0,416.0 L1290.0,416.0 L1290.0,195.0 L1340.0,195.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M1130.0,522.0 L1310.0,522.0 L1310.0,320.0 L1340.0,320.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M1310.0,490.0 L1340.0,490.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M1130.0,628.0 L1295.0,628.0 L1295.0,750.0 L1340.0,750.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<rect x="900.0" y="880.0" width="300.0" height="110.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="17" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1050.0" y="920.9">Prometheus</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1050.0" y="944.5">scrapes etl-service /metrics:</tspan><tspan x="1050.0" y="960.7">runs, rows loaded, orphans</tspan></text>
+<rect x="1320.0" y="880.0" width="340.0" height="110.0" rx="10.0" fill="#ffe8cc" stroke="#d9480f" stroke-width="2.0"/>
+<text xml:space="preserve" style="white-space:pre" font-size="15" fill="#1e1e1e" text-anchor="middle" font-weight="700"><tspan x="1490.0" y="920.3">Grafana · PAD data warehouse</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="middle"><tspan x="1490.0" y="943.2">reads warehouse-db as dw_reader</tspan><tspan x="1490.0" y="959.5">(read-only): ETL health + figures</tspan></text>
+<path d="M1050.0,830.0 L1050.0,880.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M1490.0,830.0 L1490.0,880.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<path d="M1200.0,935.0 L1320.0,935.0" fill="none" stroke="#862e9c" stroke-width="2.0" stroke-linejoin="round" marker-end="url(#m862e9c)"/>
+<text xml:space="preserve" style="white-space:pre" font-size="13" fill="#495057" text-anchor="start"><tspan x="40.0" y="892.1">Why one JSON staging table: the services' schemas change</tspan><tspan x="40.0" y="908.3">(player-service renamed many columns), and the model reads</tspan><tspan x="40.0" y="924.6">both the old and the new names.</tspan><tspan x="40.0" y="940.8"></tspan><tspan x="40.0" y="957.1">Tested by etl-service/test (unit + integration) and</tspan><tspan x="40.0" y="973.3">deploy/etl-e2e.test.mjs on the live stack.</tspan></text>
+<text xml:space="preserve" style="white-space:pre" font-size="11" fill="#868e96" text-anchor="start"><tspan x="40.0" y="1070.2">Generated by docs/diagrams/build.py · editable source: docs/diagrams/06-data-warehouse-etl.excalidraw (open at excalidraw.com) · state of the repository, November 2026</tspan></text>
+</svg>
