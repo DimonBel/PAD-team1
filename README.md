@@ -446,6 +446,14 @@ npx newman run postman/new-endpoints.postman_collection.json \
   --env-var etl_admin_key="$ETL_ADMIN_KEY"
 ```
 
+Or run everything at once: `postman/all-services.postman_collection.json` has every collection
+as a folder, and `postman/pad-team1.postman_environment.json` is the environment to copy to
+`pad-team1.local.postman_environment.json` (gitignored) and fill from `.env`:
+
+```bash
+npx newman run postman/all-services.postman_collection.json -e postman/pad-team1.local.postman_environment.json
+```
+
 The `game-service` collection shows player-, resource-, zombie- and game-service working
 together: two real players play a session, a lobby trade moves their stock in resource-service,
 and an XP steal shows up once in player-service.

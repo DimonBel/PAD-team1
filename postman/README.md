@@ -18,9 +18,34 @@ uses. Every run picks a fresh `run_id`, so the collections can be run again and 
 | `resource-service` | entity stock, idempotent by `event_id` (service-only) | `baseUrl` |
 | `new-endpoints` | Gateway cache (`X-Cache` MISS→HIT, `/cache/stats`), sessions, broker sagas, ETL runs | `gateway_url`, `broker_url`, `etl_url` |
 
+## Everything in one run
+
+`all-services.postman_collection.json` ("PAD-team1 / all services") holds every collection above
+as one numbered folder (1. player-service … 9. new-endpoints), so a single Collection Runner run
+covers the whole platform: 275 requests. Each folder keeps its collection's auth and scripts and
+starts from that collection's own variable defaults, so it behaves exactly as if it ran alone.
+Regenerate it after editing a service collection (the folders are copies).
+
+Pair it, or any single collection, with the environment instead of typing secrets into each
+collection:
+
+- `pad-team1.postman_environment.json`, the "PAD-team1" environment: the URLs plus placeholders
+  for the secrets. Committed.
+- `pad-team1.local.postman_environment.json`, the "PAD-team1 local" environment: the same, filled
+  from your `.env`. It is **gitignored**; create it by copying the template, renaming it and
+  filling the values (table below).
+
+In Postman: import both files from `postman/`, pick "PAD-team1 local" in the environment selector
+(top right), open "PAD-team1 / all services" and press **Run**. Environment values win over the
+collections' own placeholders, and no script writes them.
+
+```bash
+npx newman run postman/all-services.postman_collection.json -e postman/pad-team1.local.postman_environment.json
+```
+
 ## Before you run
 
-Set these collection variables from the root `.env` (they default to `change_me`, the
+Without the environment, set these collection variables from the root `.env` (they default to `change_me`, the
 `.env.example` placeholders):
 
 | Variable | From `.env` | Used by |
@@ -106,6 +131,10 @@ Gateway, with only the variables above set, twice in a row:
   `barricade_kit`, 60 s) takes the materials from resource-service but stays `in_progress`, and
   the item never reaches player-service. The collection only checks a job is created.
 - **player-service, 500 instead of 404/422** on a player id that is not a UUID.
+- **Ruby services (resource-, zombie-service; Sequel), 500 after a database failover.** When the
+  Patroni leader changes, their pooled connections die and the first query on each one answers
+  `500` (`PG::ConnectionBad`) instead of reconnecting. A second run passes. Sequel's
+  `connection_validator` extension would fix it.
 
 ## A note on ordering
 
