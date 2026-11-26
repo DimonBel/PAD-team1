@@ -32,7 +32,7 @@ Every component of the stack and how they connect: the Gateway with its Redis ca
 
 ![System overview](./docs/diagrams/01-system-overview.svg)
 
-> **Where the code lives.** The diagrams show the whole stack. This repository has the saga coordinator (the `MessageBroker-team1` submodule, 5.0.0, with its saga log in `broker-db`), the services that serve the saga steps (player-service and game-service 5.0.0, see [player-service and game-service 5.0.0](#player-service-and-game-service-500); exam-service and world-service 5.0.0), the replicated databases (`db-replication/`), and `etl-service` 5.0.0 (the `ETL-team1` submodule) with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Redis cache and the monitoring stack are not yet in this compose or in the `Gateway-team1` submodule. On the diagrams, `Message-Broker/` is the `MessageBroker-team1` submodule.
+> **Where the code lives.** The diagrams show the whole stack. This repository has the saga coordinator (the `MessageBroker-team1` submodule, 5.0.0, with its saga log in `broker-db`), the services that serve the saga steps (player-service and game-service 5.0.0, see [player-service and game-service 5.0.0](#player-service-and-game-service-500); exam-service and world-service 5.0.0), the replicated databases (`db-replication/`), and `etl-service` 5.0.0 (the `ETL-team1` submodule) with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Gateway 5.1.0 (the `Gateway-team1` submodule) runs with its Redis cache, `cache-1..3` (see [Cache and sessions](#cache-and-sessions-gateway-510)). The monitoring stack is not yet in this compose. On the diagrams, `Message-Broker/` is the `MessageBroker-team1` submodule.
 
 ### Cache and consistent hashing
 
@@ -185,7 +185,7 @@ world-service start empty, and their demo data is loaded separately (see
 | world-service | [`alexandramihalevschi/world-service:5.0.0`](https://hub.docker.com/r/alexandramihalevschi/world-service) | Alexandra Mihalevschi |
 | zombie-service | [`tukaram40k/zombie-service:5.0.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:5.0.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
-| gateway | [`dimon1/gateway:3.1.5-amd64`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
+| gateway | [`dimon1/gateway:5.1.0`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
 | service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
 | message-broker | [`dimon1/message-broker:5.0.0`](https://hub.docker.com/r/dimon1/message-broker) | Dmitrii Belih |
 | etl-service | [`dimon1/etl-service:5.0.0`](https://hub.docker.com/r/dimon1/etl-service) | Dmitrii Belih |
@@ -254,8 +254,8 @@ them as before.
 - **File logging.** With `LOG_DIR` set, every log line also goes to
   `<LOG_DIR>/<service>/<instance>.log` as JSON, for the Gateway's `GET /api/logs`.
 
-`docker-compose.yaml` does not set `BROKER_GRPC_URL` or `LOG_DIR` yet; sending game-service's calls
-through the broker also needs a Gateway 4.x.
+`docker-compose.yaml` does not set `BROKER_GRPC_URL` or `LOG_DIR` yet. The Gateway (5.1.0) can send
+its own traffic through the broker too, with `GATEWAY_BROKER_URL`.
 
 #### player-service and game-service 5.0.0
 
@@ -525,10 +525,17 @@ The cache is sharded over the Redis nodes in `CACHE_NODES` by consistent hashing
 per node (`CACHE_VNODES`). When a node goes down only its keys move to the next node, about a third
 of them with three nodes, where `hash mod N` would move about two thirds. The algorithm, the
 measurements and the comparison with Redis Cluster's hash slots are in
-[Gateway-team1/docs/CONSISTENT_HASHING.md](Gateway-team1/docs/CONSISTENT_HASHING.md).
+[Gateway-team1/docs/CONSISTENT_HASHING.md](https://github.com/DimonBel/Gateway-team1/blob/main/docs/CONSISTENT_HASHING.md).
+
+In `docker-compose.yaml` the gateway runs `dimon1/gateway:5.1.0` with three Redis nodes, `cache-1..3`
+(`CACHE_NODES`). Sessions, logout and `/cache/stats` work as it is. GET answers are cached only in
+broker mode, when every request goes through the Message Broker: set
+`GATEWAY_BROKER_URL=http://message-broker:8090` in `.env`. Without it, requests go straight to the
+services and GET answers are not cached.
 
 ```bash
-curl -i localhost:8080/api/crafting/recipes -H "Authorization: Bearer $JWT"   # X-Cache: MISS, then HIT
+curl -i localhost:8080/api/crafting/recipes -H "Authorization: Bearer $JWT"   # broker mode: X-Cache: MISS, then HIT
+curl -H "X-Admin-Key: $CACHE_ADMIN_KEY" localhost:8080/cache/stats             # the nodes and their share of the ring
 ```
 
 ### Database replication

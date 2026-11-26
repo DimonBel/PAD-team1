@@ -74,6 +74,19 @@ x-db-router: &db-router
     timeout: 3s
     retries: 40
 
+# One node of the gateway's cache (Lab 5): plain Redis, nothing on disk, 64 MB, least recently used
+# keys evicted first.
+x-cache-node: &cache-node
+  image: redis:7.4-alpine
+  pull_policy: always
+  restart: unless-stopped
+  command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
 services:
   # --------------------------------------------- etcd: Patroni's leader election (quorum 2 of 3)
   etcd-1:
@@ -837,9 +850,9 @@ services:
   # image published on Docker Hub; the MessageBroker-team1 submodule is the same release's code.
   # BROKER_IMAGE pins another tag, e.g. to try a build of your own.
   #
-  # Nothing is routed through it yet: the services and the Gateway use it once BROKER_URL and
-  # BROKER_GRPC_URL are set on them, which needs Gateway 4.x, a Player Service with gRPC and a
-  # Service Discovery that keeps topics. Until then it runs on its own: GET /health, /v1/topics.
+  # Nothing is routed through it by default: the Gateway uses it once GATEWAY_BROKER_URL is set
+  # (see the gateway below), and the services once BROKER_URL and BROKER_GRPC_URL are set on them.
+  # Until then it runs on its own: GET /health, /v1/topics.
   # Lab 5: where the broker keeps its saga log, dead letters and waiting topic events, so a restart
   # resumes every unfinished saga and loses no dead letter (MessageBroker-team1 README).
   broker-db:
@@ -1008,14 +1021,33 @@ services:
   # Keep the shape above for anything new:
   # own database, own volume, required secrets, registered with Service Discovery.
 
+  # ------------------------------------------------------------------- gateway cache (Lab 5)
+  # Three independent Redis nodes. The gateway shards its cache over them by consistent hashing
+  # (Gateway-team1/docs/CONSISTENT_HASHING.md): each key lives on one node, and while a node is down
+  # its keys go to the next one on the ring. Only a cache, so nothing is persisted, memory is capped
+  # and the least recently used keys go first. The gateway keeps working with every node down.
+  cache-1:
+    <<: *cache-node
+  cache-2:
+    <<: *cache-node
+  cache-3:
+    <<: *cache-node
+
   gateway:
-    image: ${GATEWAY_IMAGE:-dimon1/gateway:3.2.2}
+    image: ${GATEWAY_IMAGE:-dimon1/gateway:5.1.0}
     pull_policy: always
     container_name: gateway
     restart: unless-stopped
     depends_on:
       service-discovery:
         condition: service_healthy
+      # The cache only needs to exist: with a node down the gateway skips it (X-Cache: BYPASS).
+      cache-1:
+        condition: service_started
+      cache-2:
+        condition: service_started
+      cache-3:
+        condition: service_started
     environment:
       PORT: "8080"
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -1045,6 +1077,15 @@ services:
       GAME_SERVICE_WS_URL: ${GAME_SERVICE_WS_URL:-ws://localhost:4002}
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?set GATEWAY_SHARED_SECRET in .env}
       WS_TICKET_SECRET: ${WS_TICKET_SECRET:?set WS_TICKET_SECRET in .env}
+      # Lab 5 (5.1.0): login sessions, POST /api/players/logout and GET /cache/stats in Redis,
+      # sharded over cache-1..3; CACHE_VNODES points per node on the ring. Empty: no cache.
+      CACHE_NODES: ${CACHE_NODES-redis://cache-1:6379,redis://cache-2:6379,redis://cache-3:6379}
+      CACHE_VNODES: ${CACHE_VNODES:-160}
+      # Needed in X-Admin-Key for GET /cache/stats; empty, the endpoint is not served.
+      CACHE_ADMIN_KEY: ${CACHE_ADMIN_KEY:-}
+      # Broker mode: every REST request goes through the Message Broker, and only then are common
+      # GET answers cached too (X-Cache: HIT/MISS). Empty (the default): straight to the services.
+      BROKER_URL: ${GATEWAY_BROKER_URL:-}
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
 
