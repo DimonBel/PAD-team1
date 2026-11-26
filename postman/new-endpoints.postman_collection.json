@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "PAD-team1: cache, sessions, sagas, ETL",
-    "description": "The newest endpoints (cache, sessions, sagas, ETL), through the running docker compose stack. Set cache_admin_key, broker_admin_secret and etl_admin_key from .env (CACHE_ADMIN_KEY, BROKER_ADMIN_SECRET, ETL_ADMIN_KEY), then run the folders in order.",
+    "description": "The newest endpoints (cache, sessions, sagas, ETL), through the running docker compose stack. Set cache_admin_key, broker_admin_secret, etl_admin_key and jwt_secret from .env (CACHE_ADMIN_KEY, BROKER_ADMIN_SECRET, ETL_ADMIN_KEY, JWT_SECRET), then run the folders in order.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -210,6 +210,187 @@
       "name": "Sagas (Message Broker)",
       "item": [
         {
+          "name": "Start a saga 1/4: create a zone (moderator)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A moderator token, signed here with JWT_SECRET (jwt_secret) like the world and exam",
+                  "// collections do: only a moderator may place resource nodes, and nobody registers as one.",
+                  "const cryptoJs = require('crypto-js');",
+                  "function b64url(words) {",
+                  "    return cryptoJs.enc.Base64.stringify(words).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                  "}",
+                  "const secret = pm.variables.get('jwt_secret');",
+                  "if (!secret) throw new Error('Set jwt_secret to JWT_SECRET from .env');",
+                  "const now = Math.floor(Date.now() / 1000);",
+                  "const head = b64url(cryptoJs.enc.Utf8.parse(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));",
+                  "const body = b64url(cryptoJs.enc.Utf8.parse(JSON.stringify({",
+                  "    sub: pm.variables.replaceIn('{{$guid}}'), roles: ['player', 'moderator'], iat: now, exp: now + 3600",
+                  "})));",
+                  "pm.collectionVariables.set('moderator_jwt', head + '.' + body + '.' + b64url(cryptoJs.HmacSHA256(head + '.' + body, secret)));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('saga_zone_id', pm.response.json().zone_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{moderator_jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/zones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Saga zone {{$timestamp}}\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start a saga 2/4: create a room in it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('saga_room_id', pm.response.json().room_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{moderator_jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/rooms",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zone_id\": \"{{saga_zone_id}}\",\n  \"type\": \"laboratory\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start a saga 3/4: place a resource node, world starts a resource-node saga",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('node_id', pm.response.json().node_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{moderator_jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/world/rooms/{{saga_room_id}}/resource-nodes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"wood\",\n  \"initial_yield\": 40\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start a saga 4/4: the resource-node saga completed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const saga = pm.response.json();",
+                  "pm.test('completed', () => pm.expect(saga.state).to.eql('completed'));",
+                  "pm.test('begin, create-point and activate are done', () => pm.expect(saga.steps.map((s) => s.name + ':' + s.status))",
+                  "    .to.eql(['begin:done', 'create-point:done', 'activate:done']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-broker-admin-secret",
+                "value": "{{broker_admin_secret}}"
+              }
+            ],
+            "url": "{{broker_url}}/v1/sagas/resource-node:{{node_id}}?wait_ms=15000"
+          },
+          "response": []
+        },
+        {
+          "name": "The broker lists it with the resource-node sagas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 and listed', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().sagas.map((s) => s.saga_id)).to.include('resource-node:' + pm.collectionVariables.get('node_id'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-broker-admin-secret",
+                "value": "{{broker_admin_secret}}"
+              }
+            ],
+            "url": "{{broker_url}}/v1/admin/sagas?type=resource-node&limit=5"
+          },
+          "response": []
+        },
+        {
           "name": "List completed zombie-steal sagas",
           "event": [
             {
@@ -382,6 +563,26 @@
     },
     {
       "key": "player_jwt",
+      "value": ""
+    },
+    {
+      "key": "jwt_secret",
+      "value": ""
+    },
+    {
+      "key": "moderator_jwt",
+      "value": ""
+    },
+    {
+      "key": "saga_zone_id",
+      "value": ""
+    },
+    {
+      "key": "saga_room_id",
+      "value": ""
+    },
+    {
+      "key": "node_id",
       "value": ""
     }
   ]
