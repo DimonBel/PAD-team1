@@ -28,16 +28,13 @@ Since Lab 4, the API Gateway is still the single entry point for clients, and th
 
 ### Main diagram
 
-The whole platform on one page: the Gateway with its Redis cache, the Message Broker, Service Discovery, the eight services with their replicated databases, the data warehouse with the ETL, and the monitoring.
+The whole platform, drawn by the team on a whiteboard: the Gateway with its Redis cache, the Message Broker, Service Discovery, the eight services with their replicated databases, the data warehouse with the ETL, and the monitoring.
 
-![Main architecture diagram, v3](./docs/architecture-v3.png)
+![Main architecture diagram, v3, drawn on a whiteboard](./docs/architecture-v3-whiteboard.jpg)
 
-<details>
-<summary>The same architecture, drawn by the team on a whiteboard</summary>
+The same architecture as a clean drawing:
 
-![Architecture on the whiteboard, v3](./docs/architecture-v3-whiteboard.jpg)
-
-</details>
+![Architecture diagram, v3](./docs/architecture-v3.png)
 
 ### System overview
 
@@ -46,12 +43,6 @@ Every component of the stack and how they connect: the Gateway with its Redis ca
 ![System overview](./docs/diagrams/01-system-overview.svg)
 
 > **Where the code lives.** The diagrams show the whole stack. This repository has the saga coordinator (the `MessageBroker-team1` submodule, 5.0.0, with its saga log in `broker-db`), the services that serve the saga steps (player-service and game-service 5.0.0, see [player-service and game-service 5.0.0](#player-service-and-game-service-500); exam-service and world-service 5.0.0), the replicated databases (`db-replication/`), and `etl-service` 5.0.0 (the `ETL-team1` submodule) with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Gateway 5.1.0 (the `Gateway-team1` submodule) runs with its Redis cache, `cache-1..3` (see [Cache and sessions](#cache-and-sessions-gateway-510)). The monitoring stack is not yet in this compose. On the diagrams, `Message-Broker/` is the `MessageBroker-team1` submodule.
-
-### Cache and consistent hashing
-
-The Gateway caches common GET answers and login sessions in three independent Redis nodes. Its own hash ring (160 virtual nodes per node) picks the node for each key, so a node that goes down only moves its own keys to the next node.
-
-![Cache and consistent hashing](./docs/diagrams/03-cache-consistent-hashing.svg)
 
 ### Database replication and failover
 
