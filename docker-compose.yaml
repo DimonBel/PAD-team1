@@ -891,8 +891,8 @@ services:
   # image published on Docker Hub; the MessageBroker-team1 submodule is the same release's code.
   # BROKER_IMAGE pins another tag, e.g. to try a build of your own.
   #
-  # Nothing is routed through it by default: the Gateway uses it once GATEWAY_BROKER_URL is set
-  # (see the gateway below), and the services once BROKER_URL and BROKER_GRPC_URL are set on them.
+  # Every request goes through it by default: the Gateway (GATEWAY_BROKER_URL) and the services
+  # (BROKER_URL, BROKER_GRPC_URL); set those empty to go straight to the services instead.
   # Until then it runs on its own: GET /health, /v1/topics.
   # Lab 5: where the broker keeps its saga log, dead letters and waiting topic events, so a restart
   # resumes every unfinished saga and loses no dead letter (MessageBroker-team1 README).
@@ -1125,8 +1125,9 @@ services:
       # Needed in X-Admin-Key for GET /cache/stats; empty, the endpoint is not served.
       CACHE_ADMIN_KEY: ${CACHE_ADMIN_KEY:-}
       # Broker mode: every REST request goes through the Message Broker, and only then are common
-      # GET answers cached too (X-Cache: HIT/MISS). Empty (the default): straight to the services.
-      BROKER_URL: ${GATEWAY_BROKER_URL:-}
+      # GET answers cached too (X-Cache: HIT/MISS). Set GATEWAY_BROKER_URL empty to go straight to
+      # the services.
+      BROKER_URL: ${GATEWAY_BROKER_URL-http://message-broker:8090}
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
 
