@@ -250,6 +250,10 @@ services:
       base-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
       DATABASE_URL: postgres://${BASE_DB_USER:-base}:${BASE_DB_PASSWORD}@base-db:5432/${BASE_DB_NAME:-base_service}
       PORT: 4007
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -328,6 +332,12 @@ services:
       crafting-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: postgres://${CRAFTING_DB_USER:-crafting}:${CRAFTING_DB_PASSWORD}@crafting-db:5432/${CRAFTING_DB_NAME:-crafting_service}
       PORT: 4008
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -405,6 +415,12 @@ services:
       world-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${WORLD_DB_USER:-world}:${WORLD_DB_PASSWORD}@world-db:5432/${WORLD_DB_NAME:-world_service}
       PORT: ${WORLD_PHX_PORT:-4004}
       PHX_HOST: ${PHX_HOST:-localhost}
@@ -489,6 +505,12 @@ services:
       exam-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${EXAM_DB_USER:-exam}:${EXAM_DB_PASSWORD}@exam-db:5432/${EXAM_DB_NAME:-exam_service}
       PORT: ${EXAM_PHX_PORT:-4005}
       PHX_HOST: ${PHX_HOST:-localhost}
@@ -570,6 +592,12 @@ services:
       zombie-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: postgres://${ZOMBIE_DB_USER:-zombie}:${ZOMBIE_DB_PASSWORD}@zombie-db:5432/${ZOMBIE_DB_NAME:-zombie_service}
       PORT: 4003
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -645,6 +673,8 @@ services:
       resource-db:
         condition: service_healthy
     environment:
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: postgres://${RESOURCE_DB_USER:-resource}:${RESOURCE_DB_PASSWORD}@resource-db:5432/${RESOURCE_DB_NAME:-resource_service}
       PORT: 4006
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -717,6 +747,8 @@ services:
       player-db:
         condition: service_healthy
     environment:
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${PLAYER_DB_USER:-player}:${PLAYER_DB_PASSWORD}@player-db:5432/${PLAYER_DB_NAME:-player_service}
 
       # Its entrypoint waits on Postgres with pg_isready before migrating,
@@ -818,6 +850,12 @@ services:
         condition: service_healthy
 
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${GAME_DB_USER:-game}:${GAME_DB_PASSWORD}@game-db:5432/${GAME_DB_NAME:-game_service}
       SECRET_KEY_BASE: ${GAME_SECRET_KEY_BASE:?set GAME_SECRET_KEY_BASE in .env}
       PORT: 4002
@@ -853,8 +891,8 @@ services:
   # image published on Docker Hub; the MessageBroker-team1 submodule is the same release's code.
   # BROKER_IMAGE pins another tag, e.g. to try a build of your own.
   #
-  # Nothing is routed through it by default: the Gateway uses it once GATEWAY_BROKER_URL is set
-  # (see the gateway below), and the services once BROKER_URL and BROKER_GRPC_URL are set on them.
+  # Every request goes through it by default: the Gateway (GATEWAY_BROKER_URL) and the services
+  # (BROKER_URL, BROKER_GRPC_URL); set those empty to go straight to the services instead.
   # Until then it runs on its own: GET /health, /v1/topics.
   # Lab 5: where the broker keeps its saga log, dead letters and waiting topic events, so a restart
   # resumes every unfinished saga and loses no dead letter (MessageBroker-team1 README).
@@ -1087,8 +1125,9 @@ services:
       # Needed in X-Admin-Key for GET /cache/stats; empty, the endpoint is not served.
       CACHE_ADMIN_KEY: ${CACHE_ADMIN_KEY:-}
       # Broker mode: every REST request goes through the Message Broker, and only then are common
-      # GET answers cached too (X-Cache: HIT/MISS). Empty (the default): straight to the services.
-      BROKER_URL: ${GATEWAY_BROKER_URL:-}
+      # GET answers cached too (X-Cache: HIT/MISS). Set GATEWAY_BROKER_URL empty to go straight to
+      # the services.
+      BROKER_URL: ${GATEWAY_BROKER_URL-http://message-broker:8090}
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
 
