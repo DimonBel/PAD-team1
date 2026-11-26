@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+// World Service: the calls other services make to it. Each RPC is the gRPC form of the REST
+// endpoint named above it, with the same fields and the same idempotency key.
+package world.v1;
+
+service World {
+  // GET /api/world/map
+  rpc GetMap(GetMapRequest) returns (CampusMap);
+
+  // GET /api/world/rooms?zone_id=
+  rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+
+  // GET /api/world/rooms/{room_id}
+  rpc GetRoom(GetRoomRequest) returns (RoomDetails);
+
+  // GET /api/world/zones/{zone_id}. Crafting Service gates wing-locked recipes on it.
+  rpc GetZone(GetZoneRequest) returns (Zone);
+
+  // POST /api/world/rooms/{room_id}/barricades. Called by Base Service. Idempotent through
+  // event_id.
+  rpc SetBarricadeLevel(SetBarricadeLevelRequest) returns (BarricadeLevel);
+
+  // POST /api/world/unlocks. Called by Exam Service when a milestone exam is passed.
+  // Idempotent through event_id.
+  rpc UnlockSection(UnlockSectionRequest) returns (UnlockedSection);
+
+  // Lab 5: the resource-node saga's steps on this service, called by the Message Broker as the saga
+  // coordinator. Idempotent: a repeat answers the same status. NOT_FOUND for an unknown node.
+  // BeginNode: point_status requested -> pending (the node isn't offered for gathering yet).
+  rpc BeginNode(NodeStepRequest) returns (NodeStepResult);
+  // CancelNode (compensation of BeginNode): the node is removed. FAILED_PRECONDITION once active.
+  rpc CancelNode(NodeStepRequest) returns (NodeStepResult);
+  // ActivateNode: pending -> active, then world.resource_node_created is published.
+  // UNAVAILABLE while the event can't be published, so the broker asks again.
+  rpc ActivateNode(NodeStepRequest) returns (NodeStepResult);
+}
+
+message GetMapRequest {}
+
+message CampusMap {
+  string map_id = 1;
+  string name = 2;
+  int32 version = 3;
+  repeated string zones = 4;
+}
+
+message ListRoomsRequest {
+  optional string zone_id = 1;
+}
+
+message Room {
+  string room_id = 1;
+  string zone_id = 2;
+  string type = 3;
+  string resource = 4;
+  int32 barricade_level = 5;
+}
+
+message ListRoomsResponse {
+  repeated Room rooms = 1;
+}
+
+message GetRoomRequest {
+  string room_id = 1;
+}
+
+message ResourceNode {
+  string node_id = 1;
+  string resource = 2;
+  int32 remaining = 3;
+}
+
+message RoomDetails {
+  string room_id = 1;
+  string zone_id = 2;
+  string type = 3;
+  string resource = 4;
+  int32 barricade_level = 5;
+  repeated ResourceNode resource_nodes = 6;
+}
+
+message GetZoneRequest {
+  string zone_id = 1;
+}
+
+message Zone {
+  string zone_id = 1;
+  string name = 2;
+  bool unlocked = 3;
+}
+
+message SetBarricadeLevelRequest {
+  string room_id = 1;
+  string event_id = 2;
+  int32 barricade_level = 3;
+}
+
+message BarricadeLevel {
+  string room_id = 1;
+  int32 barricade_level = 2;
+}
+
+message UnlockSectionRequest {
+  string event_id = 1;
+  string player_id = 2;
+  string course_id = 3;
+  optional string achievement_id = 4;
+}
+
+message NodeStepRequest {
+  // saga:<saga id>:<step>, the step's idempotency key
+  string operation_id = 1;
+  string node_id = 2;
+}
+
+message NodeStepResult {
+  // The node's point status after the step: pending, active or cancelled.
+  string status = 1;
+}
+
+message UnlockedSection {
+  string zone_id = 1;
+  bool unlocked = 2;
+  repeated string rooms_added = 3;
+}

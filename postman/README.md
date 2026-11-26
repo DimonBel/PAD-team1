@@ -13,6 +13,22 @@ headless with [Newman](https://github.com/postmanlabs/newman).
 | `player-service.postman_collection.json` | player-service | `http://localhost:4001` (collection variable is `base_url`) |
 | `game-service.postman_collection.json` | game-service | `http://localhost:4002` (collection variable is `baseUrl`) |
 | `world-service.postman_collection.json` | world-service | `http://localhost:8080`, the API Gateway (collection variable is `base_url`) |
+| `new-endpoints.postman_collection.json` | the Gateway cache and sessions, the broker's sagas, the ETL | `gateway_url` `:8080`, `broker_url` `:8090`, `etl_url` `:8100` |
+
+## Cache, sessions, sagas and ETL
+
+`new-endpoints.postman_collection.json` runs against the whole `docker compose` stack: register and
+log in, the same GET twice (`X-Cache: MISS`, then `HIT`), `GET /cache/stats`, logout and the revoked
+token (`401 SESSION_REVOKED`), the broker's saga list, and an ETL run. Set `cache_admin_key`,
+`broker_admin_secret` and `etl_admin_key` from `.env` (`CACHE_ADMIN_KEY`, `BROKER_ADMIN_SECRET`,
+`ETL_ADMIN_KEY`); the cache answers need the Gateway in broker mode.
+
+```bash
+npx newman run postman/new-endpoints.postman_collection.json \
+  --env-var "cache_admin_key=<CACHE_ADMIN_KEY>" \
+  --env-var "broker_admin_secret=<BROKER_ADMIN_SECRET>" \
+  --env-var "etl_admin_key=<ETL_ADMIN_KEY>"
+```
 
 ## Before you run anything
 

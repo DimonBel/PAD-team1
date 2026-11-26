@@ -1,5 +1,7 @@
 # Runs the team's services from the images published on Docker Hub.
-# Nothing here builds from a Dockerfile on purpose: the images are the artefact.
+# Nothing here builds from a Dockerfile on purpose: the images are the artefact. The one exception
+# is the Patroni image of the replicated databases (db-replication/patroni), built once on the first
+# `docker compose up`; PATRONI_IMAGE can point at a published tag instead.
 #
 #   cp .env.example .env     # then fill in every secret
 #   docker compose up -d
@@ -19,10 +21,154 @@
 # Every service runs a published Docker Hub image (pull_policy: always): `docker compose up` pulls the
 # newest build of each tag and never builds anything locally. Use GATEWAY_IMAGE / SERVICE_DISCOVERY_IMAGE /
 # PLAYER_IMAGE / GAME_IMAGE in .env to pin another tag.
+# ------------------------------------------------------- database replication (Lab 5)
+# Every service's database is a Patroni cluster of three Postgres nodes: one leader and two
+# streaming replicas (one of them synchronous), with automatic failover coordinated through etcd (one
+# etcd for all eight clusters, one scope each). The names base-db, crafting-db, world-db, exam-db,
+# zombie-db, resource-db, player-db and game-db belong to HAProxy, which always points :5432 at the
+# current leader and :5433 at the replicas, so no service's DATABASE_URL changed, and no service's
+# code did either. See db-replication/README.md.
+x-etcd: &etcd
+  image: quay.io/coreos/etcd:v3.5.21
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "etcdctl", "endpoint", "health"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
+# The nodes run the image exam-db-1 builds (only one service builds it, so the nodes don't race to
+# tag the same image).
+x-patroni: &patroni
+  image: ${PATRONI_IMAGE:-pad-team1/patroni:local}
+  pull_policy: never
+  restart: unless-stopped
+  depends_on:
+    etcd-1:
+      condition: service_healthy
+    etcd-2:
+      condition: service_healthy
+    etcd-3:
+      condition: service_healthy
+
+x-patroni-env: &patroni-env
+  PATRONI_ETCD3_HOSTS: "'etcd-1:2379','etcd-2:2379','etcd-3:2379'"
+  PATRONI_SUPERUSER_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:?set PATRONI_SUPERUSER_PASSWORD in .env}
+  PATRONI_REPLICATION_PASSWORD: ${PATRONI_REPLICATION_PASSWORD:?set PATRONI_REPLICATION_PASSWORD in .env}
+  PATRONI_REWIND_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD}
+  PATRONI_RESTAPI_USERNAME: patroni
+  PATRONI_RESTAPI_PASSWORD: ${PATRONI_RESTAPI_PASSWORD:?set PATRONI_RESTAPI_PASSWORD in .env}
+
+x-db-router: &db-router
+  image: haproxy:3.0-alpine
+  pull_policy: always
+  restart: unless-stopped
+  volumes:
+    - ./db-replication/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+  deploy:
+    replicas: 2
+  healthcheck:
+    # Healthy once the primary backend has a leader to send connections to.
+    test: ["CMD-SHELL", "wget -qO- 'http://127.0.0.1:8404/stats;csv' | grep -q '^primary,BACKEND,.*,UP,'"]
+    interval: 3s
+    timeout: 3s
+    retries: 40
+
+# One node of the gateway's cache (Lab 5): plain Redis, nothing on disk, 64 MB, least recently used
+# keys evicted first.
+x-cache-node: &cache-node
+  image: redis:7.4-alpine
+  pull_policy: always
+  restart: unless-stopped
+  command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
 services:
+  # --------------------------------------------- etcd: Patroni's leader election (quorum 2 of 3)
+  etcd-1:
+    <<: *etcd
+    command:
+      - etcd
+      - --name=etcd-1
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd-1:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd-1:2380
+      - --initial-cluster=etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=pad-team1-etcd
+    volumes:
+      - etcd-1:/etcd-data
+
+  etcd-2:
+    <<: *etcd
+    command:
+      - etcd
+      - --name=etcd-2
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd-2:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd-2:2380
+      - --initial-cluster=etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=pad-team1-etcd
+    volumes:
+      - etcd-2:/etcd-data
+
+  etcd-3:
+    <<: *etcd
+    command:
+      - etcd
+      - --name=etcd-3
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd-3:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd-3:2380
+      - --initial-cluster=etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=pad-team1-etcd
+    volumes:
+      - etcd-3:/etcd-data
+
+  # --------------------------------------------- pgAdmin: look at the replication (Lab 5, optional)
+  # Not started by default:  docker compose --profile dbadmin up -d pgadmin   then http://localhost:5050
+  # Every node of exam-db and world-db is listed on its own (db-replication/pgadmin/servers.json), plus
+  # each router's :5432 (leader) and :5433 (a replica), so a row written through a service can be
+  # looked up on each node. Logs in as postgres; the pgpass file is written from PATRONI_SUPERUSER_PASSWORD.
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    profiles: ["dbadmin"]
+    pull_policy: missing
+    entrypoint:
+      - /bin/sh
+      - -c
+      - echo "*:*:*:postgres:$$PGPASS_PASSWORD" > /var/lib/pgadmin/pgpass && chmod 600 /var/lib/pgadmin/pgpass && exec /entrypoint.sh
+    environment:
+      PGPASS_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      # Desktop mode: no pgAdmin login page, and no master password prompt.
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    volumes:
+      - ./db-replication/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    ports:
+      - "127.0.0.1:${PGADMIN_HOST_PORT:-5050}:80"
+
   # ----------------------------------------------------------- service-discovery
+  # 4.0.0 (the Service-Discovery-team1 submodule), for linux/amd64 and linux/arm64. Besides the
+  # registry and the health checks it keeps the topics each service listens to (GET /topics,
+  # read by the Message Broker) and alerts when an instance comes back up.
   service-discovery:
-    image: ${SERVICE_DISCOVERY_IMAGE:-dimon1/service-discovery:3.1.5-amd64}
+    image: ${SERVICE_DISCOVERY_IMAGE:-dimon1/service-discovery:4.0.0}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -47,32 +193,67 @@ services:
       retries: 5
 
   # ---------------------------------------------------------------- base-service
-  base-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- base-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  base-db-1:
+    <<: *patroni
     environment:
-      POSTGRES_USER: ${BASE_DB_USER:-base}
-      POSTGRES_PASSWORD: ${BASE_DB_PASSWORD:?set BASE_DB_PASSWORD in .env}
-      POSTGRES_DB: ${BASE_DB_NAME:-base_service}
+      <<: *patroni-env
+      PATRONI_SCOPE: base
+      PATRONI_NAME: base-db-1
+      APP_DB_USER: ${BASE_DB_USER:-base}
+      APP_DB_PASSWORD: ${BASE_DB_PASSWORD:?set BASE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${BASE_DB_NAME:-base_service}
     volumes:
-      - base-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${BASE_DB_USER:-base} -d ${BASE_DB_NAME:-base_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - base-pg-1:/var/lib/postgresql/data
+
+  base-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: base
+      PATRONI_NAME: base-db-2
+      APP_DB_USER: ${BASE_DB_USER:-base}
+      APP_DB_PASSWORD: ${BASE_DB_PASSWORD:?set BASE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${BASE_DB_NAME:-base_service}
+    volumes:
+      - base-pg-2:/var/lib/postgresql/data
+
+  base-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: base
+      PATRONI_NAME: base-db-3
+      APP_DB_USER: ${BASE_DB_USER:-base}
+      APP_DB_PASSWORD: ${BASE_DB_PASSWORD:?set BASE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${BASE_DB_NAME:-base_service}
+    volumes:
+      - base-pg-3:/var/lib/postgresql/data
+
+  # The name base-service connects to: :5432 is always the leader, :5433 the replicas.
+  base-db:
+    <<: *db-router
+    environment:
+      CLUSTER: base
+    depends_on:
+      - base-db-1
+      - base-db-2
+      - base-db-3
 
   base-service:
-    image: cobili/base-service:4.2.0
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
+    image: cobili/base-service:5.0.0
     pull_policy: always
     depends_on:
       base-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
       DATABASE_URL: postgres://${BASE_DB_USER:-base}:${BASE_DB_PASSWORD}@base-db:5432/${BASE_DB_NAME:-base_service}
       PORT: 4007
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -94,32 +275,69 @@ services:
       replicas: ${BASE_REPLICAS:-2}
 
   # ------------------------------------------------------------ crafting-service
-  crafting-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- crafting-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  crafting-db-1:
+    <<: *patroni
     environment:
-      POSTGRES_USER: ${CRAFTING_DB_USER:-crafting}
-      POSTGRES_PASSWORD: ${CRAFTING_DB_PASSWORD:?set CRAFTING_DB_PASSWORD in .env}
-      POSTGRES_DB: ${CRAFTING_DB_NAME:-crafting_service}
+      <<: *patroni-env
+      PATRONI_SCOPE: crafting
+      PATRONI_NAME: crafting-db-1
+      APP_DB_USER: ${CRAFTING_DB_USER:-crafting}
+      APP_DB_PASSWORD: ${CRAFTING_DB_PASSWORD:?set CRAFTING_DB_PASSWORD in .env}
+      APP_DB_NAME: ${CRAFTING_DB_NAME:-crafting_service}
     volumes:
-      - crafting-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${CRAFTING_DB_USER:-crafting} -d ${CRAFTING_DB_NAME:-crafting_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - crafting-pg-1:/var/lib/postgresql/data
+
+  crafting-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: crafting
+      PATRONI_NAME: crafting-db-2
+      APP_DB_USER: ${CRAFTING_DB_USER:-crafting}
+      APP_DB_PASSWORD: ${CRAFTING_DB_PASSWORD:?set CRAFTING_DB_PASSWORD in .env}
+      APP_DB_NAME: ${CRAFTING_DB_NAME:-crafting_service}
+    volumes:
+      - crafting-pg-2:/var/lib/postgresql/data
+
+  crafting-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: crafting
+      PATRONI_NAME: crafting-db-3
+      APP_DB_USER: ${CRAFTING_DB_USER:-crafting}
+      APP_DB_PASSWORD: ${CRAFTING_DB_PASSWORD:?set CRAFTING_DB_PASSWORD in .env}
+      APP_DB_NAME: ${CRAFTING_DB_NAME:-crafting_service}
+    volumes:
+      - crafting-pg-3:/var/lib/postgresql/data
+
+  # The name crafting-service connects to: :5432 is always the leader, :5433 the replicas.
+  crafting-db:
+    <<: *db-router
+    environment:
+      CLUSTER: crafting
+    depends_on:
+      - crafting-db-1
+      - crafting-db-2
+      - crafting-db-3
 
   crafting-service:
-    image: cobili/crafting-service:4.2.0
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
+    image: cobili/crafting-service:5.0.0
     pull_policy: always
     depends_on:
       crafting-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: postgres://${CRAFTING_DB_USER:-crafting}:${CRAFTING_DB_PASSWORD}@crafting-db:5432/${CRAFTING_DB_NAME:-crafting_service}
       PORT: 4008
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -138,35 +356,71 @@ services:
       replicas: ${CRAFTING_REPLICAS:-2}
   # --------------------------------------------------------------- world-service
 
-  world-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- world-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  # `mix test` uses world-service's own docker-compose.yml, which keeps a single Postgres with a port.
+  world-db-1:
+    <<: *patroni
     environment:
-      POSTGRES_USER: ${WORLD_DB_USER:-world}
-      POSTGRES_PASSWORD: ${WORLD_DB_PASSWORD:?set WORLD_DB_PASSWORD in .env}
-      POSTGRES_DB: ${WORLD_DB_NAME:-world_service}
-    ports:
-      - "${WORLD_DB_HOST_PORT:-5434}:5432"
+      <<: *patroni-env
+      PATRONI_SCOPE: world
+      PATRONI_NAME: world-db-1
+      APP_DB_USER: ${WORLD_DB_USER:-world}
+      APP_DB_PASSWORD: ${WORLD_DB_PASSWORD:?set WORLD_DB_PASSWORD in .env}
+      APP_DB_NAME: ${WORLD_DB_NAME:-world_service}
     volumes:
-      - world-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${WORLD_DB_USER:-world} -d ${WORLD_DB_NAME:-world_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - world-pg-1:/var/lib/postgresql/data
+
+  world-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: world
+      PATRONI_NAME: world-db-2
+      APP_DB_USER: ${WORLD_DB_USER:-world}
+      APP_DB_PASSWORD: ${WORLD_DB_PASSWORD:?set WORLD_DB_PASSWORD in .env}
+      APP_DB_NAME: ${WORLD_DB_NAME:-world_service}
+    volumes:
+      - world-pg-2:/var/lib/postgresql/data
+
+  world-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: world
+      PATRONI_NAME: world-db-3
+      APP_DB_USER: ${WORLD_DB_USER:-world}
+      APP_DB_PASSWORD: ${WORLD_DB_PASSWORD:?set WORLD_DB_PASSWORD in .env}
+      APP_DB_NAME: ${WORLD_DB_NAME:-world_service}
+    volumes:
+      - world-pg-3:/var/lib/postgresql/data
+
+  # The name world-service connects to: :5432 is always the leader, :5433 the replicas.
+  world-db:
+    <<: *db-router
+    environment:
+      CLUSTER: world
+    depends_on:
+      - world-db-1
+      - world-db-2
+      - world-db-3
 
   world-service:
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/world-service:4.0.0
+    image: alexandramihalevschi/world-service:5.0.0
     pull_policy: always
     depends_on:
       world-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${WORLD_DB_USER:-world}:${WORLD_DB_PASSWORD}@world-db:5432/${WORLD_DB_NAME:-world_service}
       PORT: ${WORLD_PHX_PORT:-4004}
       PHX_HOST: ${PHX_HOST:-localhost}
@@ -183,40 +437,80 @@ services:
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
       SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
       DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+      # Lab 5: a placed resource node's point is made by the resource-node saga on the Message Broker
+      # once the service runs in broker mode (BROKER_URL); off keeps the old notification either way.
+      SAGAS: ${WORLD_SAGAS:-on}
     deploy:
       replicas: ${WORLD_REPLICAS:-2}
 
   # ---------------------------------------------------------------- exam-service
 
-  exam-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- exam-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  # `mix test` uses exam-service's own docker-compose.yml, which keeps a single Postgres with a port.
+  exam-db-1:
+    <<: *patroni
+    build: ./db-replication/patroni
     environment:
-      POSTGRES_USER: ${EXAM_DB_USER:-exam}
-      POSTGRES_PASSWORD: ${EXAM_DB_PASSWORD:?set EXAM_DB_PASSWORD in .env}
-      POSTGRES_DB: ${EXAM_DB_NAME:-exam_service}
-    ports:
-      - "${EXAM_DB_HOST_PORT:-5435}:5432"
+      <<: *patroni-env
+      PATRONI_SCOPE: exam
+      PATRONI_NAME: exam-db-1
+      APP_DB_USER: ${EXAM_DB_USER:-exam}
+      APP_DB_PASSWORD: ${EXAM_DB_PASSWORD:?set EXAM_DB_PASSWORD in .env}
+      APP_DB_NAME: ${EXAM_DB_NAME:-exam_service}
     volumes:
-      - exam-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${EXAM_DB_USER:-exam} -d ${EXAM_DB_NAME:-exam_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - exam-pg-1:/var/lib/postgresql/data
+
+  exam-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: exam
+      PATRONI_NAME: exam-db-2
+      APP_DB_USER: ${EXAM_DB_USER:-exam}
+      APP_DB_PASSWORD: ${EXAM_DB_PASSWORD:?set EXAM_DB_PASSWORD in .env}
+      APP_DB_NAME: ${EXAM_DB_NAME:-exam_service}
+    volumes:
+      - exam-pg-2:/var/lib/postgresql/data
+
+  exam-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: exam
+      PATRONI_NAME: exam-db-3
+      APP_DB_USER: ${EXAM_DB_USER:-exam}
+      APP_DB_PASSWORD: ${EXAM_DB_PASSWORD:?set EXAM_DB_PASSWORD in .env}
+      APP_DB_NAME: ${EXAM_DB_NAME:-exam_service}
+    volumes:
+      - exam-pg-3:/var/lib/postgresql/data
+
+  # The name exam-service connects to: :5432 is always the leader, :5433 the replicas.
+  exam-db:
+    <<: *db-router
+    environment:
+      CLUSTER: exam
+    depends_on:
+      - exam-db-1
+      - exam-db-2
+      - exam-db-3
 
   exam-service:
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
     # Migrates on start, published for linux/amd64 and linux/arm64.
-    image: alexandramihalevschi/exam-service:4.0.0
+    image: alexandramihalevschi/exam-service:5.0.0
     pull_policy: always
     depends_on:
       exam-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${EXAM_DB_USER:-exam}:${EXAM_DB_PASSWORD}@exam-db:5432/${EXAM_DB_NAME:-exam_service}
       PORT: ${EXAM_PHX_PORT:-4005}
       PHX_HOST: ${PHX_HOST:-localhost}
@@ -233,40 +527,77 @@ services:
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8080}
       SERVICE_DISCOVERY_URL: ${SERVICE_DISCOVERY_URL:-http://service-discovery:8500}
       DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+      # Lab 5: a passed exam's XP and wing run as the exam-passed saga on the Message Broker once
+      # the service runs in broker mode (BROKER_URL); off keeps the old notifications either way.
+      SAGAS: ${EXAM_SAGAS:-on}
     deploy:
       replicas: ${EXAM_REPLICAS:-2}
 
   # ----------------------------------------------------------------- zombie-service
 
-  zombie-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- zombie-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  zombie-db-1:
+    <<: *patroni
     environment:
-      POSTGRES_USER: ${ZOMBIE_DB_USER:-zombie}
-      POSTGRES_PASSWORD: ${ZOMBIE_DB_PASSWORD:?set ZOMBIE_DB_PASSWORD in .env}
-      POSTGRES_DB: ${ZOMBIE_DB_NAME:-zombie_service}
+      <<: *patroni-env
+      PATRONI_SCOPE: zombie
+      PATRONI_NAME: zombie-db-1
+      APP_DB_USER: ${ZOMBIE_DB_USER:-zombie}
+      APP_DB_PASSWORD: ${ZOMBIE_DB_PASSWORD:?set ZOMBIE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${ZOMBIE_DB_NAME:-zombie_service}
     volumes:
-      - zombie-pgdata:/var/lib/postgresql/data
-    ports:
-      # Published so `bundle exec rspec` can reach Postgres from the host.
-      - "${ZOMBIE_DB_PORT:-5433}:5432"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${ZOMBIE_DB_USER:-zombie} -d ${ZOMBIE_DB_NAME:-zombie_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - zombie-pg-1:/var/lib/postgresql/data
+
+  zombie-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: zombie
+      PATRONI_NAME: zombie-db-2
+      APP_DB_USER: ${ZOMBIE_DB_USER:-zombie}
+      APP_DB_PASSWORD: ${ZOMBIE_DB_PASSWORD:?set ZOMBIE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${ZOMBIE_DB_NAME:-zombie_service}
+    volumes:
+      - zombie-pg-2:/var/lib/postgresql/data
+
+  zombie-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: zombie
+      PATRONI_NAME: zombie-db-3
+      APP_DB_USER: ${ZOMBIE_DB_USER:-zombie}
+      APP_DB_PASSWORD: ${ZOMBIE_DB_PASSWORD:?set ZOMBIE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${ZOMBIE_DB_NAME:-zombie_service}
+    volumes:
+      - zombie-pg-3:/var/lib/postgresql/data
+
+  # The name zombie-service connects to: :5432 is always the leader, :5433 the replicas.
+  zombie-db:
+    <<: *db-router
+    environment:
+      CLUSTER: zombie
+    depends_on:
+      - zombie-db-1
+      - zombie-db-2
+      - zombie-db-3
 
   zombie-service:
-    image: tukaram40k/zombie-service:3.0.0
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
+    image: tukaram40k/zombie-service:5.0.0
     pull_policy: always
     depends_on:
       zombie-db:
         condition: service_healthy
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: postgres://${ZOMBIE_DB_USER:-zombie}:${ZOMBIE_DB_PASSWORD}@zombie-db:5432/${ZOMBIE_DB_NAME:-zombie_service}
       PORT: 4003
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -285,34 +616,65 @@ services:
 
   # ----------------------------------------------------------------- resource-service
 
-  resource-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- resource-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  resource-db-1:
+    <<: *patroni
     environment:
-      POSTGRES_USER: ${RESOURCE_DB_USER:-resource}
-      POSTGRES_PASSWORD: ${RESOURCE_DB_PASSWORD:?set RESOURCE_DB_PASSWORD in .env}
-      POSTGRES_DB: ${RESOURCE_DB_NAME:-resource_service}
+      <<: *patroni-env
+      PATRONI_SCOPE: resource
+      PATRONI_NAME: resource-db-1
+      APP_DB_USER: ${RESOURCE_DB_USER:-resource}
+      APP_DB_PASSWORD: ${RESOURCE_DB_PASSWORD:?set RESOURCE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${RESOURCE_DB_NAME:-resource_service}
     volumes:
-      - resource-pgdata:/var/lib/postgresql/data
-    ports:
-      - "${RESOURCE_DB_PORT:-5436}:5432"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${RESOURCE_DB_USER:-resource} -d ${RESOURCE_DB_NAME:-resource_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - resource-pg-1:/var/lib/postgresql/data
+
+  resource-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: resource
+      PATRONI_NAME: resource-db-2
+      APP_DB_USER: ${RESOURCE_DB_USER:-resource}
+      APP_DB_PASSWORD: ${RESOURCE_DB_PASSWORD:?set RESOURCE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${RESOURCE_DB_NAME:-resource_service}
+    volumes:
+      - resource-pg-2:/var/lib/postgresql/data
+
+  resource-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: resource
+      PATRONI_NAME: resource-db-3
+      APP_DB_USER: ${RESOURCE_DB_USER:-resource}
+      APP_DB_PASSWORD: ${RESOURCE_DB_PASSWORD:?set RESOURCE_DB_PASSWORD in .env}
+      APP_DB_NAME: ${RESOURCE_DB_NAME:-resource_service}
+    volumes:
+      - resource-pg-3:/var/lib/postgresql/data
+
+  # The name resource-service connects to: :5432 is always the leader, :5433 the replicas.
+  resource-db:
+    <<: *db-router
+    environment:
+      CLUSTER: resource
+    depends_on:
+      - resource-db-1
+      - resource-db-2
+      - resource-db-3
 
   resource-service:
-    image: tukaram40k/resource-service:3.0.0
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
+    image: tukaram40k/resource-service:5.0.0
     pull_policy: always
     depends_on:
       resource-db:
         condition: service_healthy
     environment:
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: postgres://${RESOURCE_DB_USER:-resource}:${RESOURCE_DB_PASSWORD}@resource-db:5432/${RESOURCE_DB_NAME:-resource_service}
       PORT: 4006
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
@@ -328,32 +690,65 @@ services:
 
   # ---------------------------------------------------------------- player-service
 
-  player-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- player-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  player-db-1:
+    <<: *patroni
     environment:
-      POSTGRES_USER: ${PLAYER_DB_USER:-player}
-      POSTGRES_PASSWORD: ${PLAYER_DB_PASSWORD:?set PLAYER_DB_PASSWORD in .env}
-      POSTGRES_DB: ${PLAYER_DB_NAME:-player_service}
+      <<: *patroni-env
+      PATRONI_SCOPE: player
+      PATRONI_NAME: player-db-1
+      APP_DB_USER: ${PLAYER_DB_USER:-player}
+      APP_DB_PASSWORD: ${PLAYER_DB_PASSWORD:?set PLAYER_DB_PASSWORD in .env}
+      APP_DB_NAME: ${PLAYER_DB_NAME:-player_service}
     volumes:
-      - player-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${PLAYER_DB_USER:-player} -d ${PLAYER_DB_NAME:-player_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - player-pg-1:/var/lib/postgresql/data
+
+  player-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: player
+      PATRONI_NAME: player-db-2
+      APP_DB_USER: ${PLAYER_DB_USER:-player}
+      APP_DB_PASSWORD: ${PLAYER_DB_PASSWORD:?set PLAYER_DB_PASSWORD in .env}
+      APP_DB_NAME: ${PLAYER_DB_NAME:-player_service}
+    volumes:
+      - player-pg-2:/var/lib/postgresql/data
+
+  player-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: player
+      PATRONI_NAME: player-db-3
+      APP_DB_USER: ${PLAYER_DB_USER:-player}
+      APP_DB_PASSWORD: ${PLAYER_DB_PASSWORD:?set PLAYER_DB_PASSWORD in .env}
+      APP_DB_NAME: ${PLAYER_DB_NAME:-player_service}
+    volumes:
+      - player-pg-3:/var/lib/postgresql/data
+
+  # The name player-service connects to: :5432 is always the leader, :5433 the replicas.
+  player-db:
+    <<: *db-router
+    environment:
+      CLUSTER: player
+    depends_on:
+      - player-db-1
+      - player-db-2
+      - player-db-3
 
   player-service:
-    image: ${PLAYER_IMAGE:-dimon1/player-service:4.0.1}
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
+    image: ${PLAYER_IMAGE:-dimon1/player-service:5.0.0}
     pull_policy: always
     depends_on:
       player-db:
         condition: service_healthy
     environment:
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${PLAYER_DB_USER:-player}:${PLAYER_DB_PASSWORD}@player-db:5432/${PLAYER_DB_NAME:-player_service}
 
       # Its entrypoint waits on Postgres with pg_isready before migrating,
@@ -389,27 +784,58 @@ services:
 
   # ------------------------------------------------------------------ game-service
 
-  game-db:
-    image: postgres:16-alpine
-    pull_policy: always
+  # --------------------------------------------- game-db: Patroni cluster + HAProxy (Lab 5)
+  # No host port any more: the leader moves between nodes, and the router runs as 2 replicas.
+  game-db-1:
+    <<: *patroni
     environment:
-      POSTGRES_USER: ${GAME_DB_USER:-game}
-      POSTGRES_PASSWORD: ${GAME_DB_PASSWORD:?set GAME_DB_PASSWORD in .env}
-      POSTGRES_DB: ${GAME_DB_NAME:-game_service}
+      <<: *patroni-env
+      PATRONI_SCOPE: game
+      PATRONI_NAME: game-db-1
+      APP_DB_USER: ${GAME_DB_USER:-game}
+      APP_DB_PASSWORD: ${GAME_DB_PASSWORD:?set GAME_DB_PASSWORD in .env}
+      APP_DB_NAME: ${GAME_DB_NAME:-game_service}
     volumes:
-      - game-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${GAME_DB_USER:-game} -d ${GAME_DB_NAME:-game_service}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - game-pg-1:/var/lib/postgresql/data
+
+  game-db-2:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: game
+      PATRONI_NAME: game-db-2
+      APP_DB_USER: ${GAME_DB_USER:-game}
+      APP_DB_PASSWORD: ${GAME_DB_PASSWORD:?set GAME_DB_PASSWORD in .env}
+      APP_DB_NAME: ${GAME_DB_NAME:-game_service}
+    volumes:
+      - game-pg-2:/var/lib/postgresql/data
+
+  game-db-3:
+    <<: *patroni
+    environment:
+      <<: *patroni-env
+      PATRONI_SCOPE: game
+      PATRONI_NAME: game-db-3
+      APP_DB_USER: ${GAME_DB_USER:-game}
+      APP_DB_PASSWORD: ${GAME_DB_PASSWORD:?set GAME_DB_PASSWORD in .env}
+      APP_DB_NAME: ${GAME_DB_NAME:-game_service}
+    volumes:
+      - game-pg-3:/var/lib/postgresql/data
+
+  # The name game-service connects to: :5432 is always the leader, :5433 the replicas.
+  game-db:
+    <<: *db-router
+    environment:
+      CLUSTER: game
+    depends_on:
+      - game-db-1
+      - game-db-2
+      - game-db-3
 
   game-service:
-    image: ${GAME_IMAGE:-dimon1/game-service:4.0.1}
+    # Lab 5: a database failover can catch the boot migration mid-election; start again.
+    restart: unless-stopped
+    image: ${GAME_IMAGE:-dimon1/game-service:5.0.0}
     pull_policy: always
 
     # The release's start script ships without the executable bit,
@@ -424,6 +850,12 @@ services:
         condition: service_healthy
 
     environment:
+      # Calls to other services go through the Message Broker; empty falls back to the Gateway.
+      BROKER_URL: ${BROKER_URL-http://message-broker:8090}
+      # Calls to other services are gRPC through the broker; empty falls back to REST.
+      BROKER_GRPC_URL: ${BROKER_GRPC_URL-message-broker:9090}
+      # Calls from other services arrive here over gRPC, through the broker.
+      GRPC_PORT: 50051
       DATABASE_URL: ecto://${GAME_DB_USER:-game}:${GAME_DB_PASSWORD}@game-db:5432/${GAME_DB_NAME:-game_service}
       SECRET_KEY_BASE: ${GAME_SECRET_KEY_BASE:?set GAME_SECRET_KEY_BASE in .env}
       PORT: 4002
@@ -453,25 +885,55 @@ services:
 
   # ---------------------------------------------------------------- message-broker
 
-  # Lab 4: the Message Broker (MessageBroker-team1, 4.1.0). It owns Gateway -> service and
+  # Lab 4: the Message Broker (MessageBroker-team1, 5.0.0). It owns Gateway -> service and
   # service -> service delivery: per-service queues, load balancing, retries, circuit breakers,
-  # gRPC on 9090, topics and the dead letter channel. Built from the submodule, since its image
-  # isn't on Docker Hub yet.
+  # gRPC on 9090, topics, the dead letter channel and, since 5.0.0, the saga coordinator. Runs the
+  # image published on Docker Hub; the MessageBroker-team1 submodule is the same release's code.
+  # BROKER_IMAGE pins another tag, e.g. to try a build of your own.
   #
-  # Nothing is routed through it yet: the services and the Gateway use it once BROKER_URL and
-  # BROKER_GRPC_URL are set on them, which needs Gateway 4.x, a Player Service with gRPC and a
-  # Service Discovery that keeps topics. Until then it runs on its own: GET /health, /v1/topics.
+  # Every request goes through it by default: the Gateway (GATEWAY_BROKER_URL) and the services
+  # (BROKER_URL, BROKER_GRPC_URL); set those empty to go straight to the services instead.
+  # Until then it runs on its own: GET /health, /v1/topics.
+  # Lab 5: where the broker keeps its saga log, dead letters and waiting topic events, so a restart
+  # resumes every unfinished saga and loses no dead letter (MessageBroker-team1 README).
+  broker-db:
+    image: postgres:16-alpine
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${BROKER_DB_USER:-broker}
+      POSTGRES_PASSWORD: ${BROKER_DB_PASSWORD:?set BROKER_DB_PASSWORD in .env}
+      POSTGRES_DB: ${BROKER_DB_NAME:-broker}
+    volumes:
+      - broker-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BROKER_DB_USER:-broker} -d ${BROKER_DB_NAME:-broker}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   message-broker:
-    image: pad-team1/message-broker:local
-    build: ./MessageBroker-team1
-    pull_policy: build
+    image: ${BROKER_IMAGE:-dimon1/message-broker:5.0.0}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       service-discovery:
         condition: service_healthy
+      broker-db:
+        condition: service_healthy
     environment:
       PORT: "8090"
       BROKER_GRPC_PORT: "9090"
+      # Lab 5: the saga log, dead letters and waiting events, in the broker's own database.
+      BROKER_DATABASE_URL: postgres://${BROKER_DB_USER:-broker}:${BROKER_DB_PASSWORD}@broker-db:5432/${BROKER_DB_NAME:-broker}
+      # Long-running sagas: how long a step may keep failing to be delivered before the saga
+      # compensates, how long a compensation may keep failing before the saga is stuck, the
+      # backoff between tries and one call's timeout.
+      BROKER_SAGA_STEP_DEADLINE_MS: ${BROKER_SAGA_STEP_DEADLINE_MS:-600000}
+      BROKER_SAGA_COMPENSATION_DEADLINE_MS: ${BROKER_SAGA_COMPENSATION_DEADLINE_MS:-3600000}
+      BROKER_SAGA_BACKOFF_MS: ${BROKER_SAGA_BACKOFF_MS:-1000}
+      BROKER_SAGA_BACKOFF_MAX_MS: ${BROKER_SAGA_BACKOFF_MAX_MS:-60000}
+      BROKER_SAGA_CALL_TIMEOUT_MS: ${BROKER_SAGA_CALL_TIMEOUT_MS:-8000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?set SERVICE_JWT_SECRET in .env (at least 32 characters, e.g. from openssl rand -hex 32)}
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
@@ -494,9 +956,8 @@ services:
       BROKER_CIRCUIT_THRESHOLD: ${BROKER_CIRCUIT_THRESHOLD:-3}
       BROKER_CIRCUIT_WINDOW_MS: ${BROKER_CIRCUIT_WINDOW_MS:-35000}
       BROKER_CIRCUIT_OPEN_MS: ${BROKER_CIRCUIT_OPEN_MS:-35000}
-      # Dead letters and events waiting in topic queues are kept in memory. BROKER_DATA_DIR: /data
-      # would keep them in /data/broker.sqlite across restarts, once the broker's image owns /data
-      # (4.1.0's doesn't, so it can't open the file on the broker-data volume).
+      # Dead letters are kept in broker-db (BROKER_DATABASE_URL above). Don't set BROKER_DATA_DIR:
+      # the SQLite store is gone, and 5.0.0 refuses to start with it.
       BROKER_DLQ_MAX: ${BROKER_DLQ_MAX:-1000}
       BROKER_DLQ_TTL_MS: ${BROKER_DLQ_TTL_MS:-604800000}
       # Name lookups of services with no running container take seconds; more threads keep them
@@ -510,20 +971,124 @@ services:
       timeout: 5s
       retries: 5
 
+  # ------------------------------------------------------- data warehouse & ETL (Lab 5)
+  # One database the whole platform's data is copied into, shaped for analysis (a star schema in
+  # `dw`), and the service that keeps it filled from the eight service databases. The code is the
+  # ETL-team1 submodule; the image is published from it. See "etl-service 5.0.0" in the README.
+
+  warehouse-db:
+    image: postgres:16-alpine
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${WAREHOUSE_DB_USER:-warehouse}
+      POSTGRES_PASSWORD: ${WAREHOUSE_DB_PASSWORD:?set WAREHOUSE_DB_PASSWORD in .env}
+      POSTGRES_DB: ${WAREHOUSE_DB_NAME:-warehouse}
+      # Read by ETL-team1/initdb/01-reader.sh on the first start: the password of dw_reader, a
+      # read-only role for dashboards and analysts. Empty: dw_reader is not created.
+      WAREHOUSE_READER_PASSWORD: ${WAREHOUSE_READER_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${WAREHOUSE_DB_HOST_PORT:-5440}:5432"
+    volumes:
+      - warehouse-pgdata:/var/lib/postgresql/data
+      # Needs the submodule checked out (git submodule update --init ETL-team1).
+      - ./ETL-team1/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${WAREHOUSE_DB_USER:-warehouse} -d ${WAREHOUSE_DB_NAME:-warehouse}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  etl-service:
+    image: ${ETL_IMAGE:-dimon1/etl-service:5.0.0}
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      warehouse-db:
+        condition: service_healthy
+      # The sources only need to exist: a database that is down fails only its own tables for a
+      # run, and the next run catches up.
+      player-db:
+        condition: service_started
+      game-db:
+        condition: service_started
+      exam-db:
+        condition: service_started
+      world-db:
+        condition: service_started
+      base-db:
+        condition: service_started
+      crafting-db:
+        condition: service_started
+      zombie-db:
+        condition: service_started
+      resource-db:
+        condition: service_started
+    environment:
+      PORT: "8100"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WAREHOUSE_URL: postgres://${WAREHOUSE_DB_USER:-warehouse}:${WAREHOUSE_DB_PASSWORD}@warehouse-db:5432/${WAREHOUSE_DB_NAME:-warehouse}
+      # Each service's own database user, on :5433, so the ETL reads from the replicas and never
+      # loads a leader. Its connections are read-only (default_transaction_read_only).
+      SOURCE_PLAYER_URL: postgres://${PLAYER_DB_USER:-player}:${PLAYER_DB_PASSWORD}@player-db:5433/${PLAYER_DB_NAME:-player_service}
+      SOURCE_GAME_URL: postgres://${GAME_DB_USER:-game}:${GAME_DB_PASSWORD}@game-db:5433/${GAME_DB_NAME:-game_service}
+      SOURCE_EXAM_URL: postgres://${EXAM_DB_USER:-exam}:${EXAM_DB_PASSWORD}@exam-db:5433/${EXAM_DB_NAME:-exam_service}
+      SOURCE_WORLD_URL: postgres://${WORLD_DB_USER:-world}:${WORLD_DB_PASSWORD}@world-db:5433/${WORLD_DB_NAME:-world_service}
+      SOURCE_BASE_URL: postgres://${BASE_DB_USER:-base}:${BASE_DB_PASSWORD}@base-db:5433/${BASE_DB_NAME:-base_service}
+      SOURCE_CRAFTING_URL: postgres://${CRAFTING_DB_USER:-crafting}:${CRAFTING_DB_PASSWORD}@crafting-db:5433/${CRAFTING_DB_NAME:-crafting_service}
+      SOURCE_ZOMBIE_URL: postgres://${ZOMBIE_DB_USER:-zombie}:${ZOMBIE_DB_PASSWORD}@zombie-db:5433/${ZOMBIE_DB_NAME:-zombie_service}
+      SOURCE_RESOURCE_URL: postgres://${RESOURCE_DB_USER:-resource}:${RESOURCE_DB_PASSWORD}@resource-db:5433/${RESOURCE_DB_NAME:-resource_service}
+      # Seconds between runs (0: only on demand), and every how many runs deletions are looked for.
+      ETL_INTERVAL_S: ${ETL_INTERVAL_S:-60}
+      ETL_RECONCILE_EVERY: ${ETL_RECONCILE_EVERY:-10}
+      # X-Admin-Key for POST /v1/runs. Empty: runs can't be started over HTTP.
+      ETL_ADMIN_KEY: ${ETL_ADMIN_KEY:-}
+    ports:
+      - "127.0.0.1:${ETL_HOST_PORT:-8100}:8100"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8100/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # ------------------------------------------------------------------- the rest
 
   # Every service in the contract is now in this file.
   # Keep the shape above for anything new:
   # own database, own volume, required secrets, registered with Service Discovery.
 
+  # ------------------------------------------------------------------- gateway cache (Lab 5)
+  # Three independent Redis nodes. The gateway shards its cache over them by consistent hashing
+  # (Gateway-team1/docs/CONSISTENT_HASHING.md): each key lives on one node, and while a node is down
+  # its keys go to the next one on the ring. Only a cache, so nothing is persisted, memory is capped
+  # and the least recently used keys go first. The gateway keeps working with every node down.
+  cache-1:
+    <<: *cache-node
+  cache-2:
+    <<: *cache-node
+  cache-3:
+    <<: *cache-node
+
   gateway:
-    image: ${GATEWAY_IMAGE:-dimon1/gateway:3.2.2}
+    image: ${GATEWAY_IMAGE:-dimon1/gateway:5.1.0}
     pull_policy: always
     container_name: gateway
     restart: unless-stopped
     depends_on:
       service-discovery:
         condition: service_healthy
+      # The cache only needs to exist: with a node down the gateway skips it (X-Cache: BYPASS).
+      cache-1:
+        condition: service_started
+      cache-2:
+        condition: service_started
+      cache-3:
+        condition: service_started
     environment:
       PORT: "8080"
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -553,15 +1118,47 @@ services:
       GAME_SERVICE_WS_URL: ${GAME_SERVICE_WS_URL:-ws://localhost:4002}
       GATEWAY_SHARED_SECRET: ${GATEWAY_SHARED_SECRET:?set GATEWAY_SHARED_SECRET in .env}
       WS_TICKET_SECRET: ${WS_TICKET_SECRET:?set WS_TICKET_SECRET in .env}
+      # Lab 5 (5.1.0): login sessions, POST /api/players/logout and GET /cache/stats in Redis,
+      # sharded over cache-1..3; CACHE_VNODES points per node on the ring. Empty: no cache.
+      CACHE_NODES: ${CACHE_NODES-redis://cache-1:6379,redis://cache-2:6379,redis://cache-3:6379}
+      CACHE_VNODES: ${CACHE_VNODES:-160}
+      # Needed in X-Admin-Key for GET /cache/stats; empty, the endpoint is not served.
+      CACHE_ADMIN_KEY: ${CACHE_ADMIN_KEY:-}
+      # Broker mode: every REST request goes through the Message Broker, and only then are common
+      # GET answers cached too (X-Cache: HIT/MISS). Set GATEWAY_BROKER_URL empty to go straight to
+      # the services.
+      BROKER_URL: ${GATEWAY_BROKER_URL-http://message-broker:8090}
     ports:
       - "${GATEWAY_HOST_PORT:-8080}:8080"
 
 volumes:
-  player-pgdata:
-  game-pgdata:
-  base-pgdata:
-  crafting-pgdata:
-  world-pgdata:
-  exam-pgdata:
-  zombie-pgdata:
-  resource-pgdata:
+  broker-pgdata:
+  etcd-1:
+  etcd-2:
+  etcd-3:
+  player-pg-1:
+  player-pg-2:
+  player-pg-3:
+  game-pg-1:
+  game-pg-2:
+  game-pg-3:
+  base-pg-1:
+  base-pg-2:
+  base-pg-3:
+  crafting-pg-1:
+  crafting-pg-2:
+  crafting-pg-3:
+  world-pg-1:
+  world-pg-2:
+  world-pg-3:
+  exam-pg-1:
+  exam-pg-2:
+  exam-pg-3:
+  zombie-pg-1:
+  zombie-pg-2:
+  zombie-pg-3:
+  resource-pg-1:
+  resource-pg-2:
+  resource-pg-3:
+
+  warehouse-pgdata:

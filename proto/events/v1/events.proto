@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+// Events between services (Message Broker topics). A producer publishes to a topic without
+// knowing who is interested, and the broker delivers a copy to each interested service.
+package events.v1;
+
+service Events {
+  // Served by the Message Broker: POST /v1/topics/{topic}/events.
+  rpc Publish(PublishRequest) returns (PublishResponse);
+
+  // Served by every service that subscribes to a topic: POST /internal/events/{topic}.
+  // OK acknowledges. UNAVAILABLE, INTERNAL or no answer is tried again; any other status sends
+  // the event to the dead letter channel. A delivery can be repeated, so a known event_id
+  // answers OK.
+  rpc Deliver(Event) returns (DeliverResponse);
+}
+
+message PublishRequest {
+  string topic = 1;
+  // The subscribers' idempotency key. Generated when empty.
+  string event_id = 2;
+  // ISO 8601. The time of publishing when empty.
+  string occurred_at = 3;
+  // A JSON object.
+  string data_json = 4;
+}
+
+message PublishResponse {
+  string event_id = 1;
+  // How many services the event will be delivered to.
+  int32 subscribers = 2;
+}
+
+message Event {
+  string event_id = 1;
+  string topic = 2;
+  // The service that published it.
+  string producer = 3;
+  string occurred_at = 4;
+  // A JSON object.
+  string data_json = 5;
+}
+
+message DeliverResponse {}

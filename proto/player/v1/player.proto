@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+// Player Service: the calls other services make to it. Each RPC is the gRPC form of the REST
+// endpoint named above it, with the same fields and the same idempotency key.
+package player.v1;
+
+service Players {
+  // GET /api/players/{player_id}/xp
+  rpc GetXp(GetXpRequest) returns (XpCounters);
+
+  // PATCH /api/players/{player_id}/xp. Idempotent through operation_id.
+  rpc AdjustXp(AdjustXpRequest) returns (XpAdjusted);
+  // Lab 5, saga zombie-steal: takes min(max, xp) under a row lock and says how much it took.
+  // Idempotent by operation_id: a repeat answers the same `taken` without taking it again.
+  rpc StealXp(StealXpRequest) returns (XpStolen);
+
+  // GET /api/players/{player_id}/inventory
+  rpc GetInventory(GetInventoryRequest) returns (Inventory);
+
+  // POST /api/players/{player_id}/inventory. Idempotent through operation_id.
+  rpc AddItem(AddItemRequest) returns (InventoryItem);
+
+  // PATCH /api/players/{player_id}/inventory/{item_id}. Idempotent through operation_id.
+  // The item stays at count 0 instead of being deleted.
+  rpc ChangeItemQuantity(ChangeItemQuantityRequest) returns (InventoryItem);
+}
+
+message GetXpRequest {
+  string player_id = 1;
+}
+
+message XpCounters {
+  string player_id = 1;
+  int64 xp = 2;
+  int32 level = 3;
+  int64 xp_to_next_level = 4;
+}
+
+message AdjustXpRequest {
+  string player_id = 1;
+  string operation_id = 2;
+  // Negative to take XP away (a tourist zombie stealing it).
+  int64 delta = 3;
+  // EXAM_PASSED, ZOMBIE_KILLED, ...
+  string reason = 4;
+  string source_service = 5;
+}
+
+message XpAdjusted {
+  string player_id = 1;
+  int64 xp = 2;
+  int32 level = 3;
+  bool leveled_up = 4;
+}
+
+message GetInventoryRequest {
+  string player_id = 1;
+}
+
+message InventoryItem {
+  string item_id = 1;
+  string name = 2;
+  int32 count = 3;
+}
+
+message Inventory {
+  repeated InventoryItem items = 1;
+}
+
+message AddItemRequest {
+  string player_id = 1;
+  string operation_id = 2;
+  // The item id, e.g. ZOMBIE_DETECTOR or wood.
+  string code = 3;
+  // equipment, resource, consumable, ...
+  string type = 4;
+  int32 quantity = 5;
+  // The service granting it, e.g. crafting-service.
+  string source = 6;
+  // Display name; Player Service derives one from the code when it is absent.
+  optional string name = 7;
+}
+
+message ChangeItemQuantityRequest {
+  string player_id = 1;
+  string item_id = 2;
+  string operation_id = 3;
+  // -1 to consume one.
+  int32 delta = 4;
+  // CONSUMED, STOLEN_BY_ZOMBIE, TRADED, ...
+  string reason = 5;
+}
+
+message StealXpRequest {
+  string player_id = 1;
+  string operation_id = 2;
+  // The most to take; never more than the player has.
+  int64 max = 3;
+  string reason = 4;
+  string source_service = 5;
+}
+
+message XpStolen {
+  string player_id = 1;
+  // How much was taken (0 when the player had none).
+  int64 taken = 2;
+  // The player's XP and level afterwards.
+  int64 xp = 3;
+  int32 level = 4;
+}

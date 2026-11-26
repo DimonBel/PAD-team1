@@ -1,0 +1,56 @@
+# Shared by every node of all eight clusters. Per-node and secret settings come from the environment:
+# PATRONI_SCOPE (player | game | zombie | resource | base | crafting | world | exam), PATRONI_NAME, PATRONI_ETCD3_HOSTS, PATRONI_SUPERUSER_PASSWORD,
+# PATRONI_REPLICATION_PASSWORD, PATRONI_RESTAPI_USERNAME/PASSWORD, APP_DB_USER/PASSWORD/NAME.
+
+restapi:
+  listen: 0.0.0.0:8008
+  # GET /primary, /replica, /health and /metrics stay open (HAProxy and Prometheus use them);
+  # the changing calls (switchover, restart, reinitialize) need PATRONI_RESTAPI_USERNAME/PASSWORD.
+
+bootstrap:
+  # Written to etcd once, when the cluster is first created; `patronictl edit-config` changes it later.
+  dcs:
+    ttl: 20                     # the leader lock expires 20 s after the leader stops renewing it
+    loop_wait: 5
+    retry_timeout: 5
+    maximum_lag_on_failover: 1048576   # a replica more than 1 MB behind is never promoted
+    synchronous_mode: true             # every commit waits for one replica: no acknowledged write is lost
+    synchronous_node_count: 1
+    synchronous_mode_strict: false     # with no replica left, the leader keeps accepting writes
+    postgresql:
+      use_pg_rewind: true              # an old leader rejoins as a replica instead of being rebuilt
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_log_hints: "on"
+        max_wal_senders: 10
+        max_replication_slots: 10
+        max_connections: 200
+        wal_keep_size: 256MB
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+  post_bootstrap: /usr/local/bin/post_bootstrap.sh
+
+postgresql:
+  listen: 0.0.0.0:5432
+  data_dir: /var/lib/postgresql/data/pgdata
+  bin_dir: /usr/lib/postgresql/16/bin
+  pgpass: /tmp/pgpass
+  authentication:
+    superuser:
+      username: postgres
+    replication:
+      username: replicator
+    rewind:
+      username: postgres
+  pg_hba:
+    - local all all trust
+    - host replication replicator all scram-sha-256
+    - host all all all scram-sha-256
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false

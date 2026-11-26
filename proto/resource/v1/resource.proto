@@ -1,0 +1,136 @@
+syntax = "proto3";
+
+// Resource Service: the calls other services make to it. Each RPC is the gRPC form of the REST
+// endpoint named above it, with the same fields and the same idempotency key. An empty event_id
+// means the call is not deduplicated, as when REST leaves it out.
+package resource.v1;
+
+service Resources {
+  // GET /api/resources/points?room_id=&resource=
+  rpc ListPoints(ListPointsRequest) returns (ListPointsResponse);
+
+  // POST /api/resources/points. Called by World Service for every resource node.
+  // ALREADY_EXISTS when point_id is taken, which World Service counts as success.
+  rpc CreatePoint(CreatePointRequest) returns (ResourcePoint);
+
+  // POST /api/resources/gather. Idempotent through event_id.
+  // NOT_FOUND when the point is missing, exhausted or holds another resource.
+  rpc Gather(GatherRequest) returns (GatherResult);
+
+  // GET /api/resources/entities/{entity_type}/{entity_id}
+  rpc GetEntity(GetEntityRequest) returns (EntityInventory);
+
+  // PATCH /api/resources/entities/{entity_type}/{entity_id}. Idempotent through event_id.
+  // FAILED_PRECONDITION when a remove asks for more than the entity holds.
+  rpc UpdateEntity(UpdateEntityRequest) returns (EntityInventory);
+
+  // PATCH /api/resources/map. Idempotent through event_id.
+  // FAILED_PRECONDITION when a remove asks for more than the room has left.
+  rpc UpdateMap(UpdateMapRequest) returns (MapAmount);
+}
+
+message ResourcePoint {
+  string point_id = 1;
+  string room_id = 2;
+  string resource = 3;
+  int32 amount = 4;
+  int32 max_amount = 5;
+}
+
+message ListPointsRequest {
+  optional string room_id = 1;
+  optional string resource = 2;
+}
+
+message ListPointsResponse {
+  repeated ResourcePoint points = 1;
+}
+
+message CreatePointRequest {
+  // Generated when absent.
+  optional string point_id = 1;
+  string room_id = 2;
+  string resource = 3;
+  int32 amount = 4;
+  int32 max_amount = 5;
+}
+
+message GatherRequest {
+  string event_id = 1;
+  string point_id = 2;
+  string resource = 3;
+  // player, zombie, base or crafting_job
+  string entity_type = 4;
+  string entity_id = 5;
+  int32 requested_amount = 6;
+}
+
+message EntityRef {
+  string entity_type = 1;
+  string entity_id = 2;
+}
+
+message GatherResult {
+  string gather_id = 1;
+  string transaction_id = 2;
+  string event_id = 3;
+  string point_id = 4;
+  string resource = 5;
+  // At most requested_amount: whatever the point had left.
+  int32 amount_gathered = 6;
+  int32 requested_amount = 7;
+  int32 remaining_at_point = 8;
+  EntityRef credited_to = 9;
+  string status = 10;
+}
+
+message Item {
+  string item_id = 1;
+  int32 count = 2;
+}
+
+message GetEntityRequest {
+  // player, zombie, base or crafting_job
+  string entity_type = 1;
+  string entity_id = 2;
+}
+
+message EntityInventory {
+  repeated Item items = 1;
+}
+
+enum EntityOperation {
+  ENTITY_OPERATION_UNSPECIFIED = 0;
+  ENTITY_OPERATION_ADD = 1;
+  ENTITY_OPERATION_REMOVE = 2;
+  ENTITY_OPERATION_SET = 3;
+}
+
+message UpdateEntityRequest {
+  string entity_type = 1;
+  string entity_id = 2;
+  string event_id = 3;
+  EntityOperation operation = 4;
+  repeated Item items = 5;
+}
+
+enum MapOperation {
+  MAP_OPERATION_UNSPECIFIED = 0;
+  MAP_OPERATION_SET = 1;
+  MAP_OPERATION_ADD = 2;
+  MAP_OPERATION_REMOVE = 3;
+}
+
+message UpdateMapRequest {
+  string event_id = 1;
+  string room_id = 2;
+  string resource = 3;
+  MapOperation operation = 4;
+  int32 amount = 5;
+}
+
+message MapAmount {
+  string room_id = 1;
+  string resource = 2;
+  int32 amount = 3;
+}
