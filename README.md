@@ -186,7 +186,7 @@ world-service start empty, and their demo data is loaded separately (see
 | zombie-service | [`tukaram40k/zombie-service:5.0.0`](https://hub.docker.com/r/tukaram40k/zombie-service) | Ivan Rudenco |
 | resource-service | [`tukaram40k/resource-service:5.0.0`](https://hub.docker.com/r/tukaram40k/resource-service) | Ivan Rudenco |
 | gateway | [`dimon1/gateway:5.1.0`](https://hub.docker.com/r/dimon1/gateway) | Dmitrii Belih |
-| service-discovery | [`dimon1/service-discovery:3.1.5-amd64`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
+| service-discovery | [`dimon1/service-discovery:4.0.0`](https://hub.docker.com/r/dimon1/service-discovery) | Dmitrii Belih |
 | message-broker | [`dimon1/message-broker:5.0.0`](https://hub.docker.com/r/dimon1/message-broker) | Dmitrii Belih |
 | etl-service | [`dimon1/etl-service:5.0.0`](https://hub.docker.com/r/dimon1/etl-service) | Dmitrii Belih |
 
@@ -355,7 +355,13 @@ with none listed it falls back to the service name. See what is registered:
 ```bash
 curl http://localhost:8500/health                     # counts of services, instances and bans
 curl http://localhost:8500/services/base-service      # every replica, with its status
+curl http://localhost:8500/topics                     # which services listen to which topic (4.0.0)
 ```
+
+The compose runs Service Discovery 4.0.0, [`dimon1/service-discovery:4.0.0`](https://hub.docker.com/r/dimon1/service-discovery)
+(the `Service-Discovery-team1` submodule; `SERVICE_DISCOVERY_IMAGE` pins another tag). Besides the
+registry and the health checks it keeps the topics each service registers, which the Message Broker
+reads, and with `DISCORD_WEBHOOK_URL` set it also says when an instance is back up.
 
 The other Ruby services use their own ports:
 

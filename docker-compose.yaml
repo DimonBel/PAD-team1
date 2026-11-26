@@ -164,8 +164,11 @@ services:
       - "127.0.0.1:${PGADMIN_HOST_PORT:-5050}:80"
 
   # ----------------------------------------------------------- service-discovery
+  # 4.0.0 (the Service-Discovery-team1 submodule), for linux/amd64 and linux/arm64. Besides the
+  # registry and the health checks it keeps the topics each service listens to (GET /topics,
+  # read by the Message Broker) and alerts when an instance comes back up.
   service-discovery:
-    image: ${SERVICE_DISCOVERY_IMAGE:-dimon1/service-discovery:3.1.5-amd64}
+    image: ${SERVICE_DISCOVERY_IMAGE:-dimon1/service-discovery:4.0.0}
     pull_policy: always
     restart: unless-stopped
     environment:
