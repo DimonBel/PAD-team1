@@ -10,7 +10,6 @@ Each diagram is written three times into docs/diagrams/:
 - <name>.svg: vector, used by the README;
 - <name>.png: 2x raster, for slides and anything that can't show SVG.
 
-The overview is also copied to docs/architecture-overview.svg / .png.
 Edit the diagrams here, not in the exported files, so the three formats stay the same.
 """
 
@@ -27,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from diagrams_content import ALL  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-DOCS = HERE.parent
 
 
 def render_png(d, png: Path, scale: int = 2) -> bool:
@@ -66,11 +64,6 @@ def main() -> None:
             else:
                 line += " (no PNG: needs macOS qlmanage + sips)"
         print(line)
-    overview = HERE / "01-system-overview"
-    if overview.with_suffix(".svg").exists():
-        shutil.copyfile(overview.with_suffix(".svg"), DOCS / "architecture-overview.svg")
-    if overview.with_suffix(".png").exists():
-        shutil.copyfile(overview.with_suffix(".png"), DOCS / "architecture-overview.png")
 
 
 if __name__ == "__main__":

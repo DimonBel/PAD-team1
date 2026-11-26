@@ -36,12 +36,6 @@ The same architecture as a clean drawing:
 
 ![Architecture diagram, v3](./docs/architecture-v3.png)
 
-### System overview
-
-Every component of the stack and how they connect: the Gateway with its Redis cache, the Message Broker with the saga coordinator, Service Discovery, the eight services and their databases (replicated ones drawn as a stack), the data warehouse and the monitoring.
-
-![System overview](./docs/diagrams/01-system-overview.svg)
-
 > **Where the code lives.** The diagrams show the whole stack. This repository has the saga coordinator (the `MessageBroker-team1` submodule, 5.0.0, with its saga log in `broker-db`), the services that serve the saga steps (player-service and game-service 5.0.0, see [player-service and game-service 5.0.0](#player-service-and-game-service-500); exam-service and world-service 5.0.0), the replicated databases (`db-replication/`), and `etl-service` 5.0.0 (the `ETL-team1` submodule) with `warehouse-db` (see [etl-service 5.0.0](#etl-service-500)). The Gateway 5.1.0 (the `Gateway-team1` submodule) runs with its Redis cache, `cache-1..3` (see [Cache and sessions](#cache-and-sessions-gateway-510)). The monitoring stack is not yet in this compose. On the diagrams, `Message-Broker/` is the `MessageBroker-team1` submodule.
 
 ### Database replication and failover
