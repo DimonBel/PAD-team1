@@ -1,206 +1,114 @@
 # Postman collections
 
-One collection per service. Import the `.json` files into Postman, or run them
-headless with [Newman](https://github.com/postmanlabs/newman).
+One collection per service, plus `new-endpoints` for the Gateway cache, the broker's sagas and the
+ETL. **Every collection runs through the API Gateway** (`http://localhost:8080`) against the whole
+`docker compose` stack. Nothing is minted by hand: each collection registers its own players,
+logs them in through the Gateway, signs the service tokens it needs, and stocks the resources it
+uses. Every run picks a fresh `run_id`, so the collections can be run again and again.
 
-| Collection | Service | Default `baseUrl` |
+| Collection | What it shows | Gateway variable |
 | --- | --- | --- |
-| `base-service.postman_collection.json` | base-service | `http://localhost:8080`, the API Gateway; `serviceUrl` for `00 Health` |
-| `crafting-service.postman_collection.json` | crafting-service | `http://localhost:8080`, the API Gateway; `serviceUrl` for `00 Health` |
-| `zombie-service.postman_collection.json` | zombie-service | `http://localhost:4003` |
-| `resource-service.postman_collection.json` | resource-service | `http://localhost:4006` |
-| `exam-service.postman_collection.json` | exam-service | `http://localhost:8080`, the API Gateway (collection variable is `base_url`) |
-| `player-service.postman_collection.json` | player-service | `http://localhost:4001` (collection variable is `base_url`) |
-| `game-service.postman_collection.json` | game-service | `http://localhost:4002` (collection variable is `baseUrl`) |
-| `world-service.postman_collection.json` | world-service | `http://localhost:8080`, the API Gateway (collection variable is `base_url`) |
-| `new-endpoints.postman_collection.json` | the Gateway cache and sessions, the broker's sagas, the ETL | `gateway_url` `:8080`, `broker_url` `:8090`, `etl_url` `:8100` |
+| `player-service` | register, login (Gateway JWT), profile, XP (idempotent), inventory, friends, trades between two players, logout → `401 SESSION_REVOKED` | `base_url` |
+| `game-service` | **player-, resource-, zombie- and game-service together**: two real players, a lobby and a session, a lobby trade that moves stock in resource-service, an XP steal that player-service shows, the semester end charging the steal once | `base_url` |
+| `exam-service` | courses, exams, attempts; a passed exam runs the broker's exam-passed saga (XP in player-service, the wing unlocked in world-service) | `base_url` |
+| `world-service` | maps, zones, rooms, resource nodes; `exam.passed` through the broker | `base_url` |
+| `base-service` | bases, facilities, rooms, barricades, decorations, Kiki, with a real player and a base stocked in resource-service | `baseUrl` |
+| `crafting-service` | recipes, unlocks, jobs, with the player's materials stocked in resource-service | `baseUrl` |
+| `zombie-service` | zombie routes (service-only) | `baseUrl` |
+| `resource-service` | entity stock, idempotent by `event_id` (service-only) | `baseUrl` |
+| `new-endpoints` | Gateway cache (`X-Cache` MISS→HIT, `/cache/stats`), sessions, broker sagas, ETL runs | `gateway_url`, `broker_url`, `etl_url` |
 
-## Cache, sessions, sagas and ETL
+## Before you run
 
-`new-endpoints.postman_collection.json` runs against the whole `docker compose` stack: register and
-log in, the same GET twice (`X-Cache: MISS`, then `HIT`), `GET /cache/stats`, logout and the revoked
-token (`401 SESSION_REVOKED`), the broker's saga list, and an ETL run. Set `cache_admin_key`,
-`broker_admin_secret` and `etl_admin_key` from `.env` (`CACHE_ADMIN_KEY`, `BROKER_ADMIN_SECRET`,
-`ETL_ADMIN_KEY`); the cache answers need the Gateway in broker mode.
+Set these collection variables from the root `.env` (they default to `change_me`, the
+`.env.example` placeholders):
+
+| Variable | From `.env` | Used by |
+| --- | --- | --- |
+| `jwt_secret` | `JWT_SECRET` | every collection except `new-endpoints`: player and moderator tokens the Gateway accepts |
+| `service_jwt_secret` | `SERVICE_JWT_SECRET` | every collection except `new-endpoints`: service tokens (`sub: "service:<name>"`) |
+| `cache_admin_key` | `CACHE_ADMIN_KEY` | `new-endpoints`: `GET /cache/stats` (404 while the key is empty) |
+| `broker_admin_secret` | `BROKER_ADMIN_SECRET` | `new-endpoints`: the saga list (open to anyone while the secret is empty) |
+| `etl_admin_key` | `ETL_ADMIN_KEY` | `new-endpoints`: `POST /v1/runs` (`503 RUNS_DISABLED` while the key is empty) |
+| `logs_admin_key` | `LOGS_ADMIN_KEY` | exam / world folder 5 log checks (skipped while empty) |
+
+The three admin keys are empty in `.env.example`; put any random value in `.env`
+(`openssl rand -hex 24`) and recreate `gateway`, `message-broker` and `etl-service`.
+
+Health folders ask Service Discovery (`discovery_url`, default `http://localhost:8500`) which
+instances are up: the services run as replicas with no host port, and Service Discovery calls
+each one's `/health` every 10 s.
+
+The Gateway answers a player token on a service-only route with `404 ROUTE_NOT_FOUND` (the route
+is hidden from players), and a request without a token with `401 UNAUTHORIZED`; the collections
+expect exactly that.
+
+## Running
+
+In Postman: import the collection, set the variables above, open the Collection Runner and run
+the whole collection top to bottom. Later requests use ids the earlier ones saved (players,
+lobby, session, base, job).
+
+Headless with [Newman](https://github.com/postmanlabs/newman), from the repository root:
 
 ```bash
+set -a; . ./.env; set +a
+for c in player-service game-service exam-service world-service base-service crafting-service zombie-service resource-service; do
+  npx newman run "postman/$c.postman_collection.json" \
+    --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
+done
 npx newman run postman/new-endpoints.postman_collection.json \
-  --env-var "cache_admin_key=<CACHE_ADMIN_KEY>" \
-  --env-var "broker_admin_secret=<BROKER_ADMIN_SECRET>" \
-  --env-var "etl_admin_key=<ETL_ADMIN_KEY>"
+  --env-var cache_admin_key="$CACHE_ADMIN_KEY" \
+  --env-var broker_admin_secret="$BROKER_ADMIN_SECRET" \
+  --env-var etl_admin_key="$ETL_ADMIN_KEY"
 ```
 
-## Before you run anything
+## Player and game service together
 
-**base-service / crafting-service** — start the service, then mint the two tokens it expects:
+`game-service` is the end-to-end story. Every check reads the other service's own answer, not
+game-service's:
 
-```bash
-docker compose exec app bundle exec rake token:player
-docker compose exec app bundle exec rake token:service
-```
+1. Register and log in a host and a guest (player-service, JWTs from the Gateway).
+2. Give the host 120 XP (player-service) and stock the players in resource-service: the host
+   2 `coffee-01`, the guest 5 `metal-01`.
+3. The host creates a lobby, the guest joins with their own JWT, a second join is `409`.
+4. Start the session (day 1, both alive); start, read and cancel an action.
+5. Trade 2 `coffee-01` for 5 `metal-01`: resource-service now shows the host with 5 `metal-01`
+   and no coffee, the guest with 2 `coffee-01`; the same trade again is `409`.
+6. A tourist zombie steals XP from the host: player-service shows the XP down by exactly the
+   stolen amount (the broker's zombie-steal saga).
+7. End the semester (`ENDING`, then `FINISHED` once the broker's session-end saga is done):
+   player-service still shows XP minus the steal, so the steal was charged once.
 
-Paste them into the collection variables `playerToken` and `serviceToken`.
+## Last run
 
-Both run as replicas with no host port in the shared compose, so `00 Health` needs
-`serviceUrl` set to `http://base-service:4007` / `http://crafting-service:4008` and Newman
-running inside the compose network (see Testing in the root README).
-Public endpoints take the player token; the ones the contract marks `[internal]`
-take the service token, and a player token on those correctly returns 401.
-
-**zombie-service** — start the service, then mint both tokens it expects:
-
-```bash
-docker compose exec zombie-service bundle exec rake token:service
-docker compose exec zombie-service bundle exec rake token:player
-```
-
-Paste them into `serviceToken` and `playerToken`. Zombie endpoints require the
-service token; the player token is used by the authentication folder to verify
-that it is rejected.
-
-**resource-service** — start the service, then mint its service token:
-
-```bash
-docker compose exec resource-service bundle exec rake token:service
-```
-
-Paste it into the collection variable `serviceToken`. All resource endpoints
-except health require the service token.
-
-**player-service** — nothing to mint by hand. It is the service that issues tokens, so the
-collection registers a player and logs in, then stores the returned JWT in `jwt` and reuses it
-for every protected request. The service-token requests read `service_token`, which the
-collection mints through the dev-only route `POST /api/_dev/mint_service_token` (guarded by
-the `X-Dev-Token` header, default `dev`). Those `/api/_dev` routes are compiled in only when
-`MIX_ENV=dev`, so on a production image they are absent and `service_token` must be supplied
-by hand.
-
-**game-service** — nothing to mint by hand either, but read this before trusting a green run.
-The collection ships placeholder values in `token` and `serviceToken` and relies on the
-service's `BYPASS_AUTH=true`, which accepts any Authorization header and also waves through
-the endpoints the contract marks internal. `docker-compose.yaml` sets `BYPASS_AUTH=false` for
-the shared stack, because the real Player Service is in it — so against that stack you must
-put a real player JWT in `token` and a real service JWT in `serviceToken`, or every request
-comes back 401.
-
-**exam-service / world-service** — nothing to mint by hand, but the Gateway must be running.
-Since 2.0.0 both services only accept requests the API Gateway forwarded (a direct call gets
-`401`), so `base_url` defaults to the Gateway, `http://localhost:8080`. The collection-level
-pre-request script signs its own JWTs the way the Gateway checks them (bundled `CryptoJS`,
-HS256 with `exp`; player tokens with `jwt_secret`, service tokens with `service_jwt_secret`
-and `sub: "service:<name>"`), stored in `player_token` / `moderator_token` / `service_token`.
-
-- `jwt_secret` / `service_jwt_secret` must equal the `JWT_SECRET` / `SERVICE_JWT_SECRET` the
-  Gateway runs with, i.e. the root `.env`. They default to `change_me`, the `.env.example`
-  placeholders. A wrong value gives `401 {"error":"UNAUTHORIZED"}` from the Gateway.
-- **Temporary, until the Gateway is in `docker-compose.yaml`:** to call a service directly, set
-  `base_url` to it (`http://localhost:4005` / `http://localhost:4004`) and `gateway_secret` to
-  `GATEWAY_SECRET` from `.env`. The pre-request script then adds the headers the Gateway would
-  send (`X-Gateway-Secret`, `X-Player-Id`, `X-Roles`, `X-Service-Name`). Leave `gateway_secret`
-  empty to go through the Gateway; in direct mode the `jwt_secret`s don't matter.
-
-Both collections start with **folder 0, Health**, and end with **folder 5, Lab 4**:
-
-- Folder 0 checks the service is listed as up in Service Discovery, with its version and gRPC
-  address (world-service also with its `exam.passed` topic). It then checks the Message Broker
-  found the service's instances there, each with a gRPC address and no open circuit. The
-  service's own `/health` has no host port and isn't routed by the Gateway, and Service
-  Discovery calls it every 10 s.
-- Folder 5 checks that a player gets `404 ROUTE_NOT_FOUND` on every route the Gateway keeps
-  for services, plus the parts of Lab 4 that cross services:
-  - exam-service: the exam passed in folder 2 unlocks its wing in World Service.
-  - world-service: an `exam.passed` event published to the broker unlocks a wing, and
-    publishing the same event again changes nothing.
-  - Both: the Gateway's log download (`GET /api/logs`) has the service's lines, with their
-    `request_id`.
-- Variables:
-  - `discovery_url`: default `http://localhost:8500`.
-  - `broker_url`: default `http://localhost:8090`. Leave it empty on a stack without the broker,
-    and its requests are skipped.
-  - `logs_admin_key`: the Gateway's `LOGS_ADMIN_KEY`. While it's empty, the log requests are
-    skipped.
-
-## Running in Postman
-
-Open the Collection Runner and run the folders top to bottom. They are numbered
-because later requests depend on earlier ones: creating a base stores `baseId`
-into a collection variable, building a facility stores `facilityId`, and so on.
-
-**exam-service / world-service** can be run again and again, in the app too: the first request
-of a run (`Create Course` / `Create Map`) picks a fresh `run_id` and clears the ids the previous
-run left in the collection variables, so a second run never hits a 422 on re-created data or
-a stale `diploma_progress`. exam-service's folder 4 (the 410 expired-attempt case) is manual:
-its request is skipped unless you set `expired_attempt_id` (see the folder description), so a
-normal run reports 0 failures.
-
-`event_id` uses Postman's `{{$guid}}`, so every run sends a fresh value. These
-services are idempotent by `event_id`, so a fixed one would replay the first
-response forever instead of exercising the endpoint.
-
-## Running headless
-
-```bash
-newman run postman/base-service.postman_collection.json \
-  --env-var playerToken="$PLAYER_TOKEN" \
-  --env-var serviceToken="$SERVICE_TOKEN"
-newman run postman/zombie-service.postman_collection.json \
-  --env-var serviceToken="$SERVICE_TOKEN" \
-  --env-var playerToken="$PLAYER_TOKEN"
-newman run postman/resource-service.postman_collection.json \
-  --env-var serviceToken="$SERVICE_TOKEN"
-
-# exam-service / world-service don't need --env-var tokens (see above). Through the Gateway
-# (default base_url http://localhost:8080), pass the JWT secrets from the root .env:
-newman run postman/exam-service.postman_collection.json \
-  --env-var jwt_secret="$JWT_SECRET" \
-  --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
-newman run postman/world-service.postman_collection.json \
-  --env-var jwt_secret="$JWT_SECRET" \
-  --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
-# Folder 5's log checks need the Gateway's key; other host ports go in the same way:
-newman run postman/world-service.postman_collection.json \
-  --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET" \
-  --env-var logs_admin_key="$LOGS_ADMIN_KEY" --env-var broker_url=http://localhost:8090
-# Temporary, without a Gateway: straight at the service, with the Gateway secret
-newman run postman/exam-service.postman_collection.json \
-  --env-var base_url=http://localhost:4005 --env-var gateway_secret="$GATEWAY_SECRET"
-
-newman run postman/player-service.postman_collection.json \
-  --env-var base_url=http://localhost:4001 \
-  --env-var dev_token="$DEV_TOKEN"
-# game-service against the shared stack, where BYPASS_AUTH is false:
-newman run postman/game-service.postman_collection.json \
-  --env-var baseUrl=http://localhost:4002 \
-  --env-var token="$PLAYER_TOKEN" \
-  --env-var serviceToken="$SERVICE_TOKEN"
-```
-
-Each request asserts its status code, including the failure paths the contract
-promises: 401 without a token, 403 on a locked recipe, 404 on an unknown id,
-409 on a duplicate, 422 on a bad payload, 429 while Kiki is on cooldown.
-
-Last run against a freshly migrated and seeded database:
+Against the dev `docker-compose.yaml` (broker mode, 3 replicas per database), through the
+Gateway, with only the variables above set, twice in a row:
 
 | Collection | Requests | Assertions | Failures |
 | --- | --- | --- | --- |
-| base-service | 35 | 36 | 0 |
-| crafting-service | 24 | 25 | 0 |
-| exam-service | 35 | 62 | 0 (Lab 4 stack: through the Gateway and the broker, log key set, two runs in a row; folder 4 skipped) |
-| world-service | 36 | 67 | 0 (Lab 4 stack: through the Gateway and the broker, log key set, two runs in a row) |
-| player-service | not run yet | | |
-| game-service | not run yet | | |
+| player-service | 37 | 62 | 0 |
+| game-service | 34 | 55 | 0 |
+| exam-service | 37 | 60 | 0 (folder 4 skipped by design) |
+| world-service | 36 | 64 | 0 |
+| base-service | 38 | 42 | 1, the known annex bug below |
+| crafting-service | 26 | 29 | 0 |
+| zombie-service | 38 | 80 | 0 |
+| resource-service | 16 | 17 | 0 |
+| new-endpoints | 13 | 15 | 0 |
 
-The player-service and game-service collections are the ones each service already ships in
-its own repository (`postman.json` on `main`), copied here unchanged except for the base URL,
-which now points at the port the shared stack publishes (4001 and 4002) instead of each
-service's standalone default of 4000. Neither has been run headlessly against the shared
-stack yet, so their rows are deliberately blank rather than filled in with numbers from a
-standalone run — the two caveats above (player-service's dev-only token route, game-service's
-`BYPASS_AUTH=false`) both change the result.
+## Known bugs these collections expose
+
+- **base-service, Annex room → 409.** `world.v1.Room` (`proto/world/v1`) has no `cleared` field,
+  so over gRPC (the compose default) base-service never sees a cleared room. The test stays red
+  until the proto carries `cleared` and `GrpcWorldClient#room` maps it.
+- **crafting-service, timed jobs never finish.** A job with `craft_time_seconds` (e.g.
+  `barricade_kit`, 60 s) takes the materials from resource-service but stays `in_progress`, and
+  the item never reaches player-service. The collection only checks a job is created.
+- **player-service, 500 instead of 404/422** on a player id that is not a UUID.
 
 ## A note on ordering
 
-The error-case folders run near the end on purpose. "Duplicate lobby -> 409"
-only conflicts once a base exists, and "Cancel a finished job -> 409" only
-applies after the job has been cancelled. Running a single request out of order
-can fail for that reason rather than because the service is broken.
+The error-case folders run near the end on purpose: "join again → 409" needs the guest already in
+the lobby, "the same trade again → 409" needs the stock already moved. Running a single request
+out of order can fail for that reason rather than because a service is broken.

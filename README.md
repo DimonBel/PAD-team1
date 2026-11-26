@@ -431,60 +431,24 @@ Watch them with `docker compose logs -f exam-service world-service`.
 
 ### Testing
 
-`postman/` holds a collection per service. Import them, or run them headless:
+`postman/` holds a collection per service, plus `new-endpoints` (Gateway cache, broker sagas,
+ETL). All of them run through the API Gateway against the whole stack and make their own players,
+tokens and stock, so the only inputs are the secrets from `.env`:
 
 ```bash
-newman run postman/base-service.postman_collection.json \
-  --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
-newman run postman/zombie-service.postman_collection.json \
-  --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
-newman run postman/resource-service.postman_collection.json \
-  --env-var serviceToken="$SERVICE_TOKEN"
+set -a; . ./.env; set +a
+for c in player-service game-service exam-service world-service base-service crafting-service zombie-service resource-service; do
+  npx newman run "postman/$c.postman_collection.json" \
+    --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
+done
+npx newman run postman/new-endpoints.postman_collection.json \
+  --env-var cache_admin_key="$CACHE_ADMIN_KEY" --env-var broker_admin_secret="$BROKER_ADMIN_SECRET" \
+  --env-var etl_admin_key="$ETL_ADMIN_KEY"
 ```
 
-base-service and crafting-service publish no host port, so their `00 Health` request can't reach
-`localhost:4007` / `4008`. Run Newman inside the compose network instead (the network is
-`<folder>_default`, here `pad-team1_default`):
-
-```bash
-docker run --rm --network pad-team1_default -v "$PWD/postman:/etc/newman" postman/newman:6-alpine \
-  run base-service.postman_collection.json \
-  --env-var baseUrl=http://gateway:8080 --env-var serviceUrl=http://base-service:4007 \
-  --env-var playerToken="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
-```
-
-Tokens come from the service itself:
-
-```bash
-docker compose exec base-service bundle exec rake token:player
-docker compose exec base-service bundle exec rake token:service
-docker compose exec zombie-service bundle exec rake token:player
-docker compose exec zombie-service bundle exec rake token:service
-docker compose exec resource-service bundle exec rake token:service
-```
-
-The exam-service and world-service collections sign their own tokens in a pre-request
-script. They only need the same secrets as your `.env`:
-
-```bash
-newman run postman/exam-service.postman_collection.json \
-  --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
-newman run postman/world-service.postman_collection.json \
-  --env-var jwt_secret="$JWT_SECRET" --env-var service_jwt_secret="$SERVICE_JWT_SECRET"
-```
-
-player-service and game-service have collections too, copied from each service's own
-repository with the base URL pointed at the port the shared stack publishes:
-
-```bash
-newman run postman/player-service.postman_collection.json --env-var base_url=http://localhost:4001
-newman run postman/game-service.postman_collection.json \
-  --env-var baseUrl=http://localhost:4002 \
-  --env-var token="$PLAYER_TOKEN" --env-var serviceToken="$SERVICE_TOKEN"
-```
-
-player-service mints its own tokens through the collection: it registers, logs in and reuses
-the JWT. game-service needs real tokens passed in, because `BYPASS_AUTH` is `false` here.
+The `game-service` collection shows player-, resource-, zombie- and game-service working
+together: two real players play a session, a lobby trade moves their stock in resource-service,
+and an XP steal shows up once in player-service.
 
 See `postman/README.md` for details and last-run results.
 

@@ -1,592 +1,1409 @@
 {
   "info": {
-    "_postman_id": "8f2b4a10-3d6e-4c21-9a77-1c0e5b6d9f01",
-    "name": "PAD - Game Service",
-    "description": "In Kahoots with the Undead - Game Service.\n\nImport this file into Postman, then run the folders top to bottom (or use the Collection Runner on the whole collection). Each request captures the ids it needs into collection variables, so nothing has to be pasted by hand.\n\nThe service ships with BYPASS_AUTH=true because Player Service does not exist yet, so the Authorization header is accepted as-is. Once Player Service is live, put a real token in the `token` variable and set BYPASS_AUTH=false; the collection keeps working unchanged.\n\nBase URL defaults to http://localhost:4002.",
+    "_postman_id": "8ad51113-343c-4d83-9f2c-cedf4f00195c",
+    "name": "game-service",
+    "description": "Game Service with Player, Resource and Zombie Service, through the API Gateway: two real players register and log in, play a lobby and a session, trade resources (checked in resource-service), lose XP to a zombie (checked in player-service) and end the semester. Set jwt_secret and service_jwt_secret from the stack's .env, then run the whole collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    { "key": "baseUrl", "value": "http://localhost:4002" },
-    { "key": "token", "value": "dev-placeholder-token" },
-    { "key": "serviceToken", "value": "dev-placeholder-service-token" },
-    { "key": "playerId", "value": "11111111-1111-1111-1111-111111111111" },
-    { "key": "playerTwoId", "value": "22222222-2222-2222-2222-222222222222" },
-    { "key": "lobbyId", "value": "" },
-    { "key": "sessionId", "value": "" },
-    { "key": "actionId", "value": "" }
-  ],
-  "auth": {
-    "type": "bearer",
-    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
   },
   "item": [
     {
       "name": "0. Health",
       "item": [
         {
-          "name": "GET /health",
+          "name": "game-service is up in Service Discovery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/services/game-service?status=up",
+            "auth": {
+              "type": "noauth"
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('database is up', () => pm.expect(pm.response.json().database).to.eql('up'));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"at least one game-service instance is up\", () => {",
+                  "    const body = pm.response.json();",
+                  "    const instances = Array.isArray(body) ? body : body.instances;",
+                  "    pm.expect(instances.length).to.be.above(0);",
+                  "    instances.forEach((i) => pm.expect(i.status).to.eql(\"up\"));",
+                  "});"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "player-service is up in Service Discovery",
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
-            "description": "Liveness plus the number of live session processes. Also used by the docker-compose healthcheck."
-          }
+            "url": "{{discovery_url}}/services/player-service?status=up",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"at least one player-service instance is up\", () => {",
+                  "    const body = pm.response.json();",
+                  "    const instances = Array.isArray(body) ? body : body.instances;",
+                  "    pm.expect(instances.length).to.be.above(0);",
+                  "    instances.forEach((i) => pm.expect(i.status).to.eql(\"up\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "resource-service is up in Service Discovery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/services/resource-service?status=up",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"at least one resource-service instance is up\", () => {",
+                  "    const body = pm.response.json();",
+                  "    const instances = Array.isArray(body) ? body : body.instances;",
+                  "    pm.expect(instances.length).to.be.above(0);",
+                  "    instances.forEach((i) => pm.expect(i.status).to.eql(\"up\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "1. Lobbies",
+      "name": "1. Setup: two players (player-service) and their resources (resource-service)",
       "item": [
         {
-          "name": "POST /api/game/lobbies - create",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
-                  "const body = pm.response.json();",
-                  "pm.collectionVariables.set('lobbyId', body.lobby_id);",
-                  "pm.test('host is the first player', () => pm.expect(body.players).to.include(body.host_id));",
-                  "pm.test('starts on day 1', () => { pm.expect(body.day_cycle).to.eql(1); pm.expect(body.phase).to.eql('day'); });"
-                ]
-              }
-            }
-          ],
+          "name": "Register the host",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/players/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"host_id\": \"{{playerId}}\",\n  \"university\": \"FAF\",\n  \"max_players\": 8,\n  \"name\": \"Cab Survivors\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies"]
-            }
-          }
-        },
-        {
-          "name": "GET /api/game/lobbies - list",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              "raw": "{\n  \"username\": \"host_{{run_id}}\",\n  \"email\": \"host_{{run_id}}@faf.university\",\n  \"password\": \"hostpass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
               }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies"]
             },
-            "description": "Not in the contract; added so the seeded data is visible and the service is CRUD-complete."
-          }
-        },
-        {
-          "name": "GET /api/game/lobbies/:lobby_id",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
-              }
+            "auth": {
+              "type": "noauth"
             }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}"]
-            }
-          }
-        },
-        {
-          "name": "POST .../join - second player",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('second player is in', () => pm.expect(pm.response.json().players).to.include(pm.collectionVariables.get('playerTwoId')));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"host_id\", pm.response.json().player_id);"
                 ]
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"player_id\": \"{{playerTwoId}}\"\n}" },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/join",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "join"]
-            }
-          }
+          ]
         },
         {
-          "name": "POST .../join again - 409 ALREADY_JOINED",
+          "name": "Register the guest",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/players/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"guest_{{run_id}}\",\n  \"email\": \"guest_{{run_id}}@faf.university\",\n  \"password\": \"guestpass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-                  "pm.test('ALREADY_JOINED', () => pm.expect(pm.response.json().error).to.eql('ALREADY_JOINED'));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"guest_id\", pm.response.json().player_id);"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Login the host",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"player_id\": \"{{playerTwoId}}\"\n}" },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/join",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "join"]
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/players/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"host_{{run_id}}@faf.university\",\n  \"password\": \"hostpass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"host_jwt\", pm.response.json().jwt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login the guest",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/players/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"guest_{{run_id}}@faf.university\",\n  \"password\": \"guestpass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"guest_jwt\", pm.response.json().jwt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Give the host 120 XP (player-service)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/players/{{host_id}}/xp",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operation_id\": \"game-xp-{{run_id}}\",\n  \"delta\": 120,\n  \"reason\": \"EXAM_PASSED\",\n  \"source_service\": \"exam-service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"120 XP\", () => pm.expect(pm.response.json().xp).to.eql(120));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Give the host 2 coffee-01 (resource-service)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/resources/entities/player/{{host_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"game-res-host-{{run_id}}\",\n  \"operation\": \"add\",\n  \"items\": [\n    {\n      \"item_id\": \"coffee-01\",\n      \"count\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"2 coffee-01\", () => pm.expect(pm.response.json()).to.deep.include({ item_id: \"coffee-01\", count: 2 }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Give the guest 5 metal-01 (resource-service)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/resources/entities/player/{{guest_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"game-res-guest-{{run_id}}\",\n  \"operation\": \"add\",\n  \"items\": [\n    {\n      \"item_id\": \"metal-01\",\n      \"count\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"5 metal-01\", () => pm.expect(pm.response.json()).to.deep.include({ item_id: \"metal-01\", count: 5 }));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "2. Sessions",
+      "name": "2. Lobby",
       "item": [
         {
-          "name": "POST /api/lobbies/:lobby_id/start",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
-                  "const body = pm.response.json();",
-                  "pm.collectionVariables.set('sessionId', body.session_id);",
-                  "pm.test('starts on DAY 1', () => { pm.expect(body.cycle).to.eql('DAY'); pm.expect(body.cycle_number).to.eql(1); });",
-                  "pm.test('map came from World Service', () => pm.expect(body.map_id).to.be.a('string'));"
-                ]
-              }
-            }
-          ],
+          "name": "POST create a lobby (host)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"cycle_duration_seconds\": 300,\n  \"semester_length_cycles\": 14\n}"
+              "raw": "{\n  \"host_id\": \"{{host_id}}\",\n  \"university\": \"FAF\",\n  \"max_players\": 8,\n  \"name\": \"Cab Survivors {{run_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/lobbies/{{lobbyId}}/start",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "lobbies", "{{lobbyId}}", "start"]
-            },
-            "description": "Host only. Pulls the map from World Service and the zombie configs from Zombie Service (both mocked), then starts the cycle timer.\n\nUse a small cycle_duration_seconds (for example 20) if you want to watch cycle_changed fire over the WebSocket."
-          }
-        },
-        {
-          "name": "GET /api/sessions/:session_id",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "",
                   "const body = pm.response.json();",
-                  "pm.test('is running', () => pm.expect(body.status).to.eql('RUNNING'));",
-                  "pm.test('reports zombies and players', () => { pm.expect(body.alive_zombies).to.be.a('number'); pm.expect(body.players).to.be.an('array'); });"
+                  "pm.test(\"open, with the host in it\", () => { pm.expect(body.status).to.eql(\"open\"); pm.expect(body.players).to.eql([pm.collectionVariables.get(\"host_id\")]); });",
+                  "pm.collectionVariables.set(\"lobby_id\", body.lobby_id);"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "GET list lobbies",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions", "{{sessionId}}"]
+            "url": "{{base_url}}/api/game/lobbies",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"lists the new lobby\", () => { const b = pm.response.json(); const list = Array.isArray(b) ? b : b.lobbies; pm.expect(list.map((l) => l.lobby_id)).to.include(pm.collectionVariables.get(\"lobby_id\")); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET the lobby",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST join (guest)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/join",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"player_id\": \"{{guest_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "The reconnect snapshot: what a client reads before the WebSocket takes over."
-          }
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{guest_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"both players are in\", () => pm.expect(pm.response.json().players).to.have.lengthOf(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST join again -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/join",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"player_id\": \"{{guest_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{guest_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "3. Actions",
+      "name": "3. Session",
       "item": [
         {
-          "name": "POST .../actions - start (202)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
-                  "const body = pm.response.json();",
-                  "pm.collectionVariables.set('actionId', body.action_id);",
-                  "pm.test('in progress', () => pm.expect(body.status).to.eql('in_progress'));",
-                  "pm.test('has a completion time', () => pm.expect(body.completes_at).to.be.a('string'));"
-                ]
-              }
-            }
-          ],
+          "name": "POST start the session",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/lobbies/{{lobby_id}}/start",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"player_id\": \"{{playerId}}\",\n  \"action_type\": \"chop_bench\",\n  \"target\": \"bench-room-A1\",\n  \"duration_seconds\": 10\n}"
+              "raw": "{\n  \"cycle_duration_seconds\": 300,\n  \"semester_length_cycles\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/actions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "actions"]
-            },
-            "description": "duration_seconds is 10 here so the action finishes while you watch. Supported action_type values: chop_bench, scavenge_canteen, clear_room, barricade, repair_base, upgrade_base."
-          }
-        },
-        {
-          "name": "POST .../actions again - 409 already active",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-                  "pm.test('contract error text', () => pm.expect(pm.response.json().error).to.eql('Player already has an active action.'));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"day 1\", () => { pm.expect(pm.response.json().cycle).to.eql(\"DAY\"); pm.expect(pm.response.json().cycle_number).to.eql(1); });",
+                  "pm.collectionVariables.set(\"session_id\", pm.response.json().session_id);"
                 ]
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"player_id\": \"{{playerId}}\",\n  \"action_type\": \"barricade\",\n  \"target\": \"door-A2\",\n  \"duration_seconds\": 60\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/actions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "actions"]
-            },
-            "description": "One action per player. Enforced by a partial unique index, so it is race-free."
-          }
+          ]
         },
         {
-          "name": "GET .../actions/:action_id - poll",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('reports progress', () => pm.expect(body.percent).to.be.a('number'));",
-                  "if (body.status === 'completed') {",
-                  "  pm.test('reward came from Resource Service', () => pm.expect(body.reward).to.be.an('array'));",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "name": "GET the session",
           "request": {
             "method": "GET",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/actions/{{actionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions", "{{sessionId}}", "actions", "{{actionId}}"]
-            },
-            "description": "Polling fallback for a dropped WebSocket. Run it again after ~10 seconds to see status flip to completed with the reward attached."
-          }
-        },
-        {
-          "name": "DELETE /api/game/actions/:action_id",
+            "url": "{{base_url}}/api/sessions/{{session_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 or 409 if it already finished', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"running, both alive\", () => { const b = pm.response.json(); pm.expect(b.status).to.eql(\"RUNNING\"); pm.expect(b.players.filter((p) => p.alive)).to.have.lengthOf(2); });"
                 ]
               }
             }
-          ],
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Actions",
+      "item": [
+        {
+          "name": "POST start an action (202)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/actions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"player_id\": \"{{host_id}}\",\n  \"action_type\": \"chop_bench\",\n  \"target\": \"bench-room-A1\",\n  \"duration_seconds\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set(\"action_id\", pm.response.json().action_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST a second action while one runs -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/actions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"player_id\": \"{{host_id}}\",\n  \"action_type\": \"barricade\",\n  \"target\": \"door-A2\",\n  \"duration_seconds\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET the action",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/sessions/{{session_id}}/actions/{{action_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE cancel the action",
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/game/actions/{{actionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "actions", "{{actionId}}"]
+            "url": "{{base_url}}/api/game/actions/{{action_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200 or 204\", () => pm.expect(pm.response.code).to.be.oneOf([200, 204]));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "4. Trades",
+      "name": "5. Trade: game-service moves the items in resource-service",
       "item": [
         {
-          "name": "POST .../trades - completed",
+          "name": "POST trade 2 coffee-01 for 5 metal-01",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/trades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_player_id\": \"{{host_id}}\",\n  \"to_player_id\": \"{{guest_id}}\",\n  \"offer\": [\n    {\n      \"item_id\": \"coffee-01\",\n      \"count\": 2\n    }\n  ],\n  \"request\": [\n    {\n      \"item_id\": \"metal-01\",\n      \"count\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('completed', () => pm.expect(pm.response.json().status).to.eql('completed'));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"completed\", () => pm.expect(pm.response.json().status).to.eql(\"completed\"));"
                 ]
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from_player_id\": \"{{playerId}}\",\n  \"to_player_id\": \"{{playerTwoId}}\",\n  \"offer\": [{ \"item_id\": \"coffee-01\", \"count\": 2 }],\n  \"request\": [{ \"item_id\": \"metal-01\", \"count\": 5 }],\n  \"cross_university\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/trades",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "trades"]
-            }
-          }
+          ]
         },
         {
-          "name": "POST .../trades - 409 insufficient",
+          "name": "resource-service: the host now has 5 metal-01, no coffee",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/resources/entities/player/{{host_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
-                  "pm.test('contract error text', () => pm.expect(pm.response.json().error).to.eql('Insufficient items to complete trade.'));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"5 metal-01, no coffee-01\", () => { const items = pm.response.json(); pm.expect(items).to.deep.include({ item_id: \"metal-01\", count: 5 }); pm.expect(items.filter((i) => i.item_id === \"coffee-01\" && i.count > 0)).to.have.lengthOf(0); });"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "resource-service: the guest now has 2 coffee-01",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/resources/entities/player/{{guest_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"2 coffee-01\", () => pm.expect(pm.response.json()).to.deep.include({ item_id: \"coffee-01\", count: 2 }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST the same trade again -> 409 insufficient",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/trades",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"from_player_id\": \"{{playerId}}\",\n  \"to_player_id\": \"{{playerTwoId}}\",\n  \"offer\": [{ \"item_id\": \"coffee-01\", \"count\": 2 }],\n  \"request\": [{ \"item_id\": \"metal-01\", \"count\": 9 }]\n}"
+              "raw": "{\n  \"from_player_id\": \"{{host_id}}\",\n  \"to_player_id\": \"{{guest_id}}\",\n  \"offer\": [\n    {\n      \"item_id\": \"coffee-01\",\n      \"count\": 2\n    }\n  ],\n  \"request\": [\n    {\n      \"item_id\": \"metal-01\",\n      \"count\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/trades",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "trades"]
-            },
-            "description": "The Resource Service mock refuses any line over 5 items, which is how the contract 409 stays demoable without a real inventory."
-          }
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "5. Zombies and cycle (service token)",
+      "name": "6. Zombies: XP stolen in game-service is gone in player-service",
       "item": [
         {
-          "name": "POST .../encounters - professor",
+          "name": "player-service: the host's XP before",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/players/{{host_id}}/xp",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('exam requested', () => pm.expect(body.exam_requested).to.eql(true));",
-                  "pm.test('exam id returned', () => pm.expect(body.exam_id).to.be.a('string'));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"120 XP\", () => pm.expect(pm.response.json().xp).to.eql(120));",
+                  "pm.collectionVariables.set(\"xp_before\", pm.response.json().xp);"
                 ]
               }
             }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{serviceToken}}", "type": "string" }]
-            },
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"player_id\": \"{{playerId}}\",\n  \"zombie_type\": \"professor_zombie\",\n  \"room_id\": \"exam-hall-3\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/encounters",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "encounters"]
-            },
-            "description": "Called by the Zombie Service tick. Needs a service token when BYPASS_AUTH=false."
-          }
+          ]
         },
         {
-          "name": "POST .../zombie-actions - TOURIST steal (200)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('completed synchronously', () => pm.expect(body.status).to.eql('COMPLETED'));",
-                  "pm.test('reports what was stolen', () => pm.expect(body.stolen.type).to.eql('XP'));"
-                ]
-              }
-            }
-          ],
+          "name": "POST encounter: a professor zombie (service)",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{serviceToken}}", "type": "string" }]
-            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/encounters",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"zombie_type\": \"TOURIST\",\n  \"action\": \"STEAL\",\n  \"target_player_id\": \"{{playerId}}\",\n  \"steal_target\": \"XP\"\n}"
+              "raw": "{\n  \"player_id\": \"{{host_id}}\",\n  \"zombie_type\": \"professor_zombie\",\n  \"room_id\": \"exam-hall-3\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/zombie-actions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions", "{{sessionId}}", "zombie-actions"]
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
             }
-          }
-        },
-        {
-          "name": "POST .../zombie-actions - PROFESSOR exam (202)",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
-                  "const body = pm.response.json();",
-                  "pm.test('in progress', () => pm.expect(body.status).to.eql('IN_PROGRESS'));",
-                  "pm.test('deadline is 120s', () => pm.expect(body.deadline_seconds).to.eql(120));"
+                  "pm.test(\"status 200 or 201 or 202\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]));"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "POST a tourist zombie steals XP",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{serviceToken}}", "type": "string" }]
-            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/sessions/{{session_id}}/zombie-actions",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"zombie_type\": \"PROFESSOR\",\n  \"action\": \"ADMINISTER_EXAM\",\n  \"target_player_id\": \"{{playerTwoId}}\",\n  \"room_id\": \"a1000000-0000-4000-8000-000000000002\"\n}"
+              "raw": "{\n  \"zombie_type\": \"TOURIST\",\n  \"action\": \"STEAL\",\n  \"target_player_id\": \"{{host_id}}\",\n  \"steal_target\": \"XP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/zombie-actions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions", "{{sessionId}}", "zombie-actions"]
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
             }
-          }
-        },
-        {
-          "name": "POST .../cycle - force day/night",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('phase flipped', () => pm.expect(pm.response.json().phase).to.be.oneOf(['day', 'night']));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test(\"completed, some XP stolen\", () => { pm.expect(body.status).to.eql(\"COMPLETED\"); pm.expect(body.stolen.type).to.eql(\"XP\"); pm.expect(body.stolen.amount).to.be.above(0); });",
+                  "pm.collectionVariables.set(\"stolen_xp\", body.stolen.amount);"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "player-service: the stolen XP is gone",
           "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/players/{{host_id}}/xp",
             "auth": {
               "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{serviceToken}}", "type": "string" }]
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"XP went down by exactly the stolen amount\", () => pm.expect(pm.response.json().xp).to.eql(Number(pm.collectionVariables.get(\"xp_before\")) - Number(pm.collectionVariables.get(\"stolen_xp\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST a professor zombie gives an exam (202)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/sessions/{{session_id}}/zombie-actions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zombie_type\": \"PROFESSOR\",\n  \"action\": \"ADMINISTER_EXAM\",\n  \"target_player_id\": \"{{guest_id}}\",\n  \"room_id\": \"a1000000-0000-4000-8000-000000000002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"an exam with a deadline\", () => { pm.expect(pm.response.json().status).to.eql(\"IN_PROGRESS\"); pm.expect(pm.response.json().deadline_seconds).to.be.above(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST force the day/night cycle",
+          "request": {
             "method": "POST",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/game/lobbies/{{lobbyId}}/cycle",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "game", "lobbies", "{{lobbyId}}", "cycle"]
-            },
-            "description": "The session process does this on its own timer; this endpoint skips the wait. Flipping into night spawns that cycle zombies and fires zombie_attack over the WebSocket."
-          }
-        }
-      ]
-    },
-    {
-      "name": "6. End the semester",
-      "item": [
-        {
-          "name": "POST /api/sessions/:session_id/end",
+            "url": "{{base_url}}/api/game/lobbies/{{lobby_id}}/cycle",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{service_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('finished', () => pm.expect(body.status).to.eql('FINISHED'));",
-                  "pm.test('reports survivors', () => pm.expect(body.survivors).to.be.an('array'));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
                 ]
               }
             }
-          ],
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. End the semester",
+      "item": [
+        {
+          "name": "POST end the session",
           "request": {
             "method": "POST",
             "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/end",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sessions", "{{sessionId}}", "end"]
+            "url": "{{base_url}}/api/sessions/{{session_id}}/end",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"ending or finished, both survived\", () => { const b = pm.response.json(); pm.expect(b.status).to.be.oneOf([\"ENDING\", \"FINISHED\"]); pm.expect(b.survivors).to.have.lengthOf(2); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET the session: finished",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/sessions/{{session_id}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// The session ends through the Message Broker's session-end saga: give it a moment.",
+                  "setTimeout(() => {}, 1500);"
+                ]
+              }
             },
-            "description": "Pushes final XP to Player Service and the results to Exam Service (both mocked), closes the lobby and stops the session process."
-          }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"FINISHED\", () => pm.expect(pm.response.json().status).to.eql(\"FINISHED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "player-service: the steal was charged once",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/players/{{host_id}}/xp",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{host_jwt}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"XP is still before - stolen (ending the session did not take it again)\", () => pm.expect(pm.response.json().xp).to.eql(Number(pm.collectionVariables.get(\"xp_before\")) - Number(pm.collectionVariables.get(\"stolen_xp\"))));"
+                ]
+              }
+            }
+          ]
         }
       ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// A run starts at \"Register the host\": a fresh run_id (unique usernames, lobbies, operation ids), and the ids",
+          "// the previous run saved are forgotten, so two runs in a row never collide.",
+          "if (pm.info.requestName === \"Register the host\" || !pm.collectionVariables.get(\"run_id\")) {",
+          "    pm.collectionVariables.set(\"run_id\", Date.now().toString(36));",
+          "    [\"host_id\", \"guest_id\", \"host_jwt\", \"guest_jwt\", \"lobby_id\", \"session_id\", \"action_id\", \"xp_before\", \"stolen_xp\"].forEach((key) => pm.collectionVariables.set(key, \"\"));",
+          "}",
+          "",
+          "// Every request goes through the API Gateway (base url). The Gateway checks each token: HS256, signed",
+          "// with JWT_SECRET (players) or SERVICE_JWT_SECRET (services, sub \"service:<name>\"). Put the stack's two",
+          "// values from .env into the collection variables jwt_secret and service_jwt_secret.",
+          "function base64url(wordArray) {",
+          "    return CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, \"-\").replace(/\\//g, \"_\").replace(/=+$/, \"\");",
+          "}",
+          "function signJWT(payload, secret) {",
+          "    const header = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify({ alg: \"HS256\", typ: \"JWT\" })));",
+          "    const body = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)));",
+          "    return header + \".\" + body + \".\" + base64url(CryptoJS.HmacSHA256(header + \".\" + body, secret));",
+          "}",
+          "const now = Math.floor(Date.now() / 1000);",
+          "",
+          "pm.collectionVariables.set(\"service_token\", signJWT({ sub: \"service:zombie-service\", roles: [\"service\"], type: \"service\", iat: now, exp: now + 300 }, pm.variables.get(\"service_jwt_secret\")));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "service_jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8500",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "host_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "host_jwt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_jwt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "service_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lobby_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "action_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "xp_before",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stolen_xp",
+      "value": "",
+      "type": "string"
     }
   ]
 }

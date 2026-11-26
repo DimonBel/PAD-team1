@@ -1,17 +1,13 @@
 {
   "info": {
     "name": "PAD-team1 / base-service",
-    "description": "Every endpoint of base-service.\n\nSet `playerToken` and `serviceToken` first:\n\n    docker compose exec app bundle exec rake token:player\n    docker compose exec app bundle exec rake token:service\n\nRun the folders top to bottom with the Collection Runner. Requests capture `baseId`, `facilityId` and `decorationId` into collection variables, so later requests reuse them. `event_id` uses {{$guid}}, so re-running never replays an old idempotency record.",
+    "description": "Base Service through the API Gateway, with a real player and a base stocked in resource-service. Set jwt_secret and service_jwt_secret from the stack's .env, then run the whole collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://localhost:8080"
-    },
-    {
-      "key": "serviceUrl",
-      "value": "http://localhost:4007"
     },
     {
       "key": "playerToken",
@@ -23,7 +19,7 @@
     },
     {
       "key": "lobbyId",
-      "value": "lobby-postman-001"
+      "value": ""
     },
     {
       "key": "baseId",
@@ -47,48 +43,100 @@
     },
     {
       "key": "playerId",
-      "value": "player-uuid-123"
+      "value": ""
+    },
+    {
+      "key": "jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "service_jwt_secret",
+      "value": "change_me",
+      "type": "string"
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8500",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
     {
-      "name": "00 Health",
-      "description": "No auth required.",
+      "name": "00 Setup: a real player (player-service)",
       "item": [
         {
-          "name": "Health",
+          "name": "Register a player",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{playerToken}}"
-              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
-            "url": {
-              "raw": "{{serviceUrl}}/health",
-              "host": [
-                "{{serviceUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
+            "url": "{{baseUrl}}/api/players/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"baseplayer_{{run_id}}\",\n  \"email\": \"baseplayer_{{run_id}}@faf.university\",\n  \"password\": \"baseplayerpass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "Liveness plus database status."
+            "auth": {
+              "type": "noauth"
+            }
           },
-          "response": [],
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('db up', () => pm.expect(pm.response.json().database).to.eql('up'));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"playerId\", pm.response.json().player_id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "00 Health",
+      "description": "No auth required.",
+      "item": [
+        {
+          "name": "base-service is up in Service Discovery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/services/base-service?status=up",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"at least one base-service instance is up\", () => {",
+                  "    const body = pm.response.json();",
+                  "    const instances = Array.isArray(body) ? body : body.instances;",
+                  "    pm.expect(instances.length).to.be.above(0);",
+                  "    instances.forEach((i) => pm.expect(i.status).to.eql(\"up\"));",
+                  "});"
                 ]
               }
             }
@@ -382,6 +430,50 @@
           ]
         },
         {
+          "name": "Stock the base in resource-service",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/resources/entities/base/{{baseId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"stock-{{run_id}}\",\n  \"operation\": \"add\",\n  \"items\": [\n    {\n      \"item_id\": \"wood-01\",\n      \"count\": 200\n    },\n    {\n      \"item_id\": \"metal-01\",\n      \"count\": 200\n    },\n    {\n      \"item_id\": \"electronics-01\",\n      \"count\": 200\n    },\n    {\n      \"item_id\": \"chemicals-01\",\n      \"count\": 200\n    },\n    {\n      \"item_id\": \"food-01\",\n      \"count\": 200\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"200 wood-01 in stock\", () => pm.expect(pm.response.json()).to.deep.include({ item_id: \"wood-01\", count: 200 }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Get base",
           "request": {
             "method": "GET",
@@ -606,6 +698,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "// KNOWN BUG (base-service + proto/world/v1): world.v1.Room has no `cleared` field, so over gRPC",
+                  "// (BROKER_GRPC_URL set, the compose default) base-service never sees a cleared room and answers 409.",
+                  "// This test stays red until the proto carries `cleared` and GrpcWorldClient#room maps it.",
                   "pm.test('status 201', () => pm.response.to.have.status(201));"
                 ]
               }
@@ -633,17 +728,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{roomId}}/barricade",
+              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{homeRoomId}}/barricade",
               "host": [
                 "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "bases",
-                "{{baseId}}",
-                "rooms",
-                "{{roomId}}",
-                "barricade"
               ]
             },
             "description": "",
@@ -685,17 +772,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{roomId}}/barricade",
+              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{homeRoomId}}/barricade",
               "host": [
                 "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "bases",
-                "{{baseId}}",
-                "rooms",
-                "{{roomId}}",
-                "barricade"
               ]
             },
             "description": ""
@@ -728,17 +807,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{roomId}}/barricade",
+              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{homeRoomId}}/barricade",
               "host": [
                 "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "bases",
-                "{{baseId}}",
-                "rooms",
-                "{{roomId}}",
-                "barricade"
               ]
             },
             "description": "",
@@ -780,17 +851,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{roomId}}/barricade",
+              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{homeRoomId}}/barricade",
               "host": [
                 "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "bases",
-                "{{baseId}}",
-                "rooms",
-                "{{roomId}}",
-                "barricade"
               ]
             },
             "description": "",
@@ -832,17 +895,9 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{roomId}}/barricade",
+              "raw": "{{baseUrl}}/api/bases/{{baseId}}/rooms/{{homeRoomId}}/barricade",
               "host": [
                 "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "bases",
-                "{{baseId}}",
-                "rooms",
-                "{{roomId}}",
-                "barricade"
               ]
             },
             "description": ""
@@ -997,6 +1052,15 @@
                   "pm.test('status 200', () => pm.response.to.have.status(200));"
                 ]
               }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"facilityId\")) { pm.execution.skipRequest(); }"
+                ]
+              }
             }
           ]
         },
@@ -1046,6 +1110,15 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"facilityId\")) { pm.execution.skipRequest(); }"
                 ]
               }
             }
@@ -1154,6 +1227,51 @@
       "name": "07 Decorations",
       "description": "",
       "item": [
+        {
+          "name": "Give the player a poster (player-service)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/players/{{playerId}}/inventory",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operation_id\": \"poster-{{run_id}}\",\n  \"code\": \"poster-01\",\n  \"type\": \"cosmetic\",\n  \"quantity\": 1,\n  \"source\": \"crafting-service\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201 or 200\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "// base-service takes the cosmetic out of the player's inventory when it is placed.",
+                  "pm.test(\"the player owns poster-01\", () => pm.expect(pm.response.json().item_id).to.eql(\"poster-01\"));"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Place decoration",
           "request": {
@@ -1283,6 +1401,15 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"decorationId\")) { console.log(\"Skipped: no decoration was placed.\"); pm.execution.skipRequest(); }"
                 ]
               }
             }
@@ -1433,7 +1560,7 @@
           ]
         },
         {
-          "name": "Player token on internal route -> 401",
+          "name": "Player token on a service-only route -> 404 (Gateway)",
           "request": {
             "method": "POST",
             "header": [
@@ -1474,7 +1601,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 401', () => pm.response.to.have.status(401));"
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"the Gateway hides service-only routes from players\", () => pm.expect(pm.response.json().error).to.eql(\"ROUTE_NOT_FOUND\"));"
                 ]
               }
             }
@@ -1705,6 +1833,39 @@
           ]
         }
       ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// A run starts at \"Register a player\": a fresh run_id (unique usernames, lobbies, operation ids), and the ids",
+          "// the previous run saved are forgotten, so two runs in a row never collide.",
+          "if (pm.info.requestName === \"Register a player\" || !pm.collectionVariables.get(\"run_id\")) {",
+          "    pm.collectionVariables.set(\"run_id\", Date.now().toString(36));",
+          "    [\"playerId\", \"baseId\", \"facilityId\", \"decorationId\"].forEach((key) => pm.collectionVariables.set(key, \"\"));",
+          "}",
+          "",
+          "// Every request goes through the API Gateway (base url). The Gateway checks each token: HS256, signed",
+          "// with JWT_SECRET (players) or SERVICE_JWT_SECRET (services, sub \"service:<name>\"). Put the stack's two",
+          "// values from .env into the collection variables jwt_secret and service_jwt_secret.",
+          "function base64url(wordArray) {",
+          "    return CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, \"-\").replace(/\\//g, \"_\").replace(/=+$/, \"\");",
+          "}",
+          "function signJWT(payload, secret) {",
+          "    const header = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify({ alg: \"HS256\", typ: \"JWT\" })));",
+          "    const body = base64url(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)));",
+          "    return header + \".\" + body + \".\" + base64url(CryptoJS.HmacSHA256(header + \".\" + body, secret));",
+          "}",
+          "const now = Math.floor(Date.now() / 1000);",
+          "",
+          "pm.collectionVariables.set(\"serviceToken\", signJWT({ sub: \"service:crafting-service\", roles: [\"service\"], type: \"service\", iat: now, exp: now + 300 }, pm.variables.get(\"service_jwt_secret\")));",
+          "pm.collectionVariables.set(\"lobbyId\", \"lobby-\" + pm.collectionVariables.get(\"run_id\"));",
+          "pm.collectionVariables.set(\"playerToken\", signJWT({ sub: pm.collectionVariables.get(\"playerId\") || \"postman-moderator\", roles: [\"player\", \"moderator\"], type: \"player\", iat: now, exp: now + 3600 }, pm.variables.get(\"jwt_secret\")));"
+        ]
+      }
     }
   ]
 }
